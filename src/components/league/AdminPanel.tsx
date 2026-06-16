@@ -187,7 +187,6 @@ export function AdminPanel({
   onSaveLeagueSettings?: (
     title: string,
     bonuses: ActiveBonuses,
-    opMode?: "school" | "club",
     tierSettings?: TierSettings,
     dynamicBonuses?: DynamicBonuses,
     dynamicPenalties?: DynamicPenalties
@@ -689,7 +688,6 @@ export function AdminPanel({
         await onSaveLeagueSettings(
           localTitle,
           localBonuses,
-          undefined,
           localTierSettings,
           localDynamicBonuses,
           localDynamicPenalties
@@ -744,7 +742,6 @@ export function AdminPanel({
         await onSaveLeagueSettings(
           localTitle,
           localBonuses,
-          undefined,
           localTierSettings,
           localDynamicBonuses,
           localDynamicPenalties
@@ -765,7 +762,6 @@ export function AdminPanel({
         await onSaveLeagueSettings(
           localTitle,
           localBonuses,
-          undefined,
           localTierSettings,
           localDynamicBonuses,
           localDynamicPenalties
@@ -785,7 +781,6 @@ export function AdminPanel({
         await onSaveLeagueSettings(
           localTitle,
           localBonuses,
-          undefined,
           localTierSettings,
           localDynamicBonuses,
           localDynamicPenalties

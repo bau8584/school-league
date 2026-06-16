@@ -266,10 +266,8 @@ type UserSession = {
   role: "MASTER" | "TEACHER" | "STUDENT";
   schoolName: string;
   userName: string;
-  scriptUrl?: string;
   studentId?: string;
   leagueName?: string;
-  settingsBonus?: string | Record<string, any>;
 } | null;
 
 function useLeagueStoreInternal() {
@@ -295,7 +293,6 @@ function useLeagueStoreInternal() {
 
   // 3대 역할 로그인 세션 상태
   const [session, setSession] = useState<UserSession>(null);
-  const [opMode, setOpMode] = useState<"school" | "club">("school");
   const [currentClassId, setCurrentClassId] = useState<string | null>(null);
   const channelRef = useRef<any>(null);
   const loadClassDataRef = useRef<any>(null);
@@ -350,9 +347,8 @@ function useLeagueStoreInternal() {
             if (migrated.lastDecayDate !== undefined) setLastDecayDate(migrated.lastDecayDate);
             if (migrated.tierSettings !== undefined) setTierSettings(migrated.tierSettings);
             if (migrated.dynamicBonuses !== undefined) setDynamicBonuses(migrated.dynamicBonuses);
-            if (migrated.dynamicPenalties !== undefined) setDynamicPenalties(migrated.dynamicPenalties);
+             if (migrated.dynamicPenalties !== undefined) setDynamicPenalties(migrated.dynamicPenalties);
             if (migrated.activeBonuses !== undefined) setActiveBonuses(migrated.activeBonuses);
-            if (migrated.opMode !== undefined) setOpMode(migrated.opMode);
           }
         }
       }
@@ -554,8 +550,7 @@ function useLeagueStoreInternal() {
             loginId: supabaseUser.id,
             role: "TEACHER",
             schoolName: "우리 학교",
-            userName: supabaseUser.email?.split("@")[0] || "교사",
-            scriptUrl: ""
+            userName: supabaseUser.email?.split("@")[0] || "교사"
           });
         } else {
           setSession(null);
@@ -2750,7 +2745,6 @@ function useLeagueStoreInternal() {
   const saveLeagueSettings = useCallback(async (
     newTitle: string, 
     newBonuses: ActiveBonuses, 
-    newOpMode?: "school" | "club",
     newTierSettings?: TierSettings,
     newDynamicBonuses?: DynamicBonuses,
     newDynamicPenalties?: DynamicPenalties
@@ -2770,10 +2764,8 @@ function useLeagueStoreInternal() {
     isSyncingRef.current = true;
     setIsSyncing(true);
 
-    const targetOpMode = newOpMode !== undefined ? newOpMode : opMode;
     setTitle(newTitle);
     setActiveBonuses(newBonuses);
-    setOpMode(targetOpMode);
 
     let finalTierSettings = tierSettings;
     if (newTierSettings) {
@@ -2852,7 +2844,6 @@ function useLeagueStoreInternal() {
         const newSettings = {
           ...(currentClass?.settings || {}),
           activeBonuses: newBonuses,
-          opMode: targetOpMode,
           tierSettings: finalTierSettings,
           dynamicBonuses: finalDynamicBonuses,
           dynamicPenalties: finalDynamicPenalties,
@@ -2881,7 +2872,7 @@ function useLeagueStoreInternal() {
       isSyncingRef.current = false;
       setIsSyncing(false);
     }
-  }, [opMode, tierThresholds, rpVariables, tierSettings, dynamicBonuses, dynamicPenalties, decayEnabled, decayDays, decayAmount, decayTiers, currentClassId, isClassOwner]);
+  }, [tierThresholds, rpVariables, tierSettings, dynamicBonuses, dynamicPenalties, decayEnabled, decayDays, decayAmount, decayTiers, currentClassId, isClassOwner]);
 
   // Decay settings save function
   const saveDecaySettings = useCallback(async (enabled: boolean, days: number, amount: number, tiers: TierName[]) => {
@@ -3414,8 +3405,6 @@ function useLeagueStoreInternal() {
     calculateAchievements,
     promotionEvent,
     setPromotionEvent,
-    opMode,
-    setOpMode,
     seasonList,
     changeSeason,
     currentViewSeason,
