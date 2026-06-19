@@ -241,7 +241,7 @@ function Index() {
                 {session.role === "TEACHER" ? (
                   <>
                     <School className="size-3.5" />
-                    <span>🏫 {session.schoolName} · {session.userName} 교사</span>
+                    <span>{session.schoolName} · {session.userName}</span>
                   </>
                 ) : (
                   <>

@@ -170,7 +170,13 @@ function useLeagueStoreInternal() {
 
       if (classData) {
         setTitle(classData.class_name);
-        
+
+        // 리그 생성 시 입력한 학교 이름을 세션에 반영 (헤더 배지 표시용)
+        const schoolNm = classData.settings?.schoolName;
+        if (schoolNm) {
+          setSession((prev) => (prev ? { ...prev, schoolName: String(schoolNm) } : prev));
+        }
+
         if (classData.settings) {
           const s = classData.settings;
           const migrated = migrateSettings(s);

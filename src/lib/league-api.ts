@@ -42,13 +42,27 @@ export async function apiUpdateClassSettingsAndName(classId: string, className: 
 
 // --- Matches API ---
 // season 을 주면 해당 시즌 경기만, 안 주면 전체.
+// PostgREST 는 요청당 최대 1000행만 반환하므로, 1000건씩 페이지네이션하여 전부 가져온다.
+// (구글시트 복원 등으로 경기가 1000건을 넘으면 최신 경기가 잘리던 문제 수정)
 export async function apiFetchMatches(classId: string, season?: string) {
-  let q = supabase
-    .from("matches")
-    .select("*")
-    .eq("class_id", classId);
-  if (season) q = q.eq("season", season);
-  return q.order("created_at", { ascending: true });
+  const pageSize = 1000;
+  let from = 0;
+  const all: any[] = [];
+  for (;;) {
+    let q = supabase
+      .from("matches")
+      .select("*")
+      .eq("class_id", classId);
+    if (season) q = q.eq("season", season);
+    const { data, error } = await q
+      .order("created_at", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) return { data: null, error };
+    if (data && data.length) all.push(...data);
+    if (!data || data.length < pageSize) break;
+    from += pageSize;
+  }
+  return { data: all, error: null };
 }
 
 export async function apiInsertMatch(classId: string, winnerId: string, loserId: string) {
