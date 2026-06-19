@@ -37,7 +37,8 @@ begin
   delete from public.students where class_id = p_class_id;
 
   -- 2) 학생 삽입 (잘못된 UUID/타입이면 캐스팅 실패 → 전체 롤백되어 원본 보존)
-  insert into public.students (id, class_id, rp, grade, class_number, student_no, real_name, nickname, gender)
+  --    student_name 은 NOT NULL 레거시 컬럼이므로 real_name 과 동일하게 함께 채운다.
+  insert into public.students (id, class_id, rp, grade, class_number, student_no, student_name, real_name, nickname, gender)
   select
     (e->>'id')::uuid,
     p_class_id,
@@ -45,7 +46,8 @@ begin
     coalesce((e->>'grade')::int, 0),
     coalesce((e->>'classNum')::int, 0),
     coalesce((e->>'number')::int, 0),
-    coalesce(nullif(btrim(e->>'realName'), ''), nullif(btrim(e->>'name'), ''), '학생'),
+    coalesce(nullif(btrim(e->>'realName'), ''), nullif(btrim(e->>'name'), ''), '학생'),  -- student_name (NOT NULL)
+    coalesce(nullif(btrim(e->>'realName'), ''), nullif(btrim(e->>'name'), ''), '학생'),  -- real_name
     nullif(btrim(coalesce(e->>'nickname', '')), ''),
     coalesce(nullif(e->>'gender', ''), 'U')
   from jsonb_array_elements(p_students) as e;
