@@ -68,7 +68,8 @@ function Index() {
     changeViewSeason,
     teacherAccessCode,
     lockLeaderboard,
-    lockAdmin
+    lockAdmin,
+    loadMatches
   } = useLeagueStore();
 
   useEffect(() => {
@@ -76,6 +77,17 @@ function Index() {
       loadClassData(classId);
     }
   }, [classId, loadClassData]);
+
+  // 경기가 필요한 탭에서만 경기를 lazy-load (순위표 등 평소 화면은 경기 미로드)
+  useEffect(() => {
+    if (!session) return;
+    const needsMatches =
+      tab === "record" || tab === "recommend" || tab === "admin" ||
+      tab === "seasonSummary" || tab === "myRecord";
+    if (needsMatches && currentViewSeason === "현재 시즌") {
+      loadMatches(classId);
+    }
+  }, [tab, session, classId, currentViewSeason, loadMatches]);
 
   const [tab, setTab] = useState<Tab>("leaderboard");
   const [editingTitle, setEditingTitle] = useState(false);

@@ -260,6 +260,11 @@ export async function apiRestoreClassData(classId: string, students: any[], matc
   });
 }
 
+// 학생 통계 컬럼(win_count/lose_count/recent_matches) 서버 재계산 (삭제/점수수정 후 호출)
+export async function apiRefreshClassStats(classId: string) {
+  return supabase.rpc("refresh_class_stats", { p_class_id: classId });
+}
+
 export async function apiRecordMatchTransaction(payload: {
   classId: string;
   matchId: string;
