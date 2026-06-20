@@ -107,7 +107,9 @@ export async function apiUpdateMatchWinnerLoser(
   winnerId: string,
   loserId: string,
   winner2Id?: string | null,
-  loser2Id?: string | null
+  loser2Id?: string | null,
+  winnerScore?: number | null,
+  loserScore?: number | null
 ) {
   return supabase
     .from("matches")
@@ -115,7 +117,9 @@ export async function apiUpdateMatchWinnerLoser(
       winner_id: winnerId,
       loser_id: loserId,
       winner2_id: winner2Id ?? null,
-      loser2_id: loser2Id ?? null
+      loser2_id: loser2Id ?? null,
+      winner_score: winnerScore ?? null,
+      loser_score: loserScore ?? null
     })
     .eq("id", matchId);
 }
@@ -282,6 +286,8 @@ export async function apiRecordMatchTransaction(payload: {
   playerUpdates: { id: string; rp: number }[];
   winner2Id?: string | null;
   loser2Id?: string | null;
+  winnerScore?: number | null;
+  loserScore?: number | null;
 }) {
   const { error } = await supabase.rpc('record_match_transaction', {
     p_class_id: payload.classId,
@@ -290,7 +296,9 @@ export async function apiRecordMatchTransaction(payload: {
     p_loser_id: payload.loserId,
     p_player_updates: payload.playerUpdates,
     p_winner2_id: payload.winner2Id ?? null,
-    p_loser2_id: payload.loser2Id ?? null
+    p_loser2_id: payload.loser2Id ?? null,
+    p_winner_score: payload.winnerScore ?? null,
+    p_loser_score: payload.loserScore ?? null
   });
   if (error) throw error;
 }
