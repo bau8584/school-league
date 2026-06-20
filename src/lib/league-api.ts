@@ -102,12 +102,20 @@ export async function apiInsertMatchesBulk(matches: any[]) {
     .insert(matches);
 }
 
-export async function apiUpdateMatchWinnerLoser(matchId: string, winnerId: string, loserId: string) {
+export async function apiUpdateMatchWinnerLoser(
+  matchId: string,
+  winnerId: string,
+  loserId: string,
+  winner2Id?: string | null,
+  loser2Id?: string | null
+) {
   return supabase
     .from("matches")
     .update({
       winner_id: winnerId,
-      loser_id: loserId
+      loser_id: loserId,
+      winner2_id: winner2Id ?? null,
+      loser2_id: loser2Id ?? null
     })
     .eq("id", matchId);
 }
@@ -272,13 +280,17 @@ export async function apiRecordMatchTransaction(payload: {
   winnerId: string;
   loserId: string;
   playerUpdates: { id: string; rp: number }[];
+  winner2Id?: string | null;
+  loser2Id?: string | null;
 }) {
   const { error } = await supabase.rpc('record_match_transaction', {
     p_class_id: payload.classId,
     p_match_id: payload.matchId,
     p_winner_id: payload.winnerId,
     p_loser_id: payload.loserId,
-    p_player_updates: payload.playerUpdates
+    p_player_updates: payload.playerUpdates,
+    p_winner2_id: payload.winner2Id ?? null,
+    p_loser2_id: payload.loser2Id ?? null
   });
   if (error) throw error;
 }

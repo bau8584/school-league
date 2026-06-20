@@ -246,10 +246,12 @@ function useLeagueStoreInternal() {
           id: m.id,
           playerAId: m.winner_id,
           playerBId: m.loser_id,
+          playerA2Id: m.winner2_id ?? undefined,
+          playerB2Id: m.loser2_id ?? undefined,
           scoreA: 21,
           scoreB: 19,
           date: m.created_at || new Date().toISOString(),
-          matchType: "single"
+          matchType: (m.winner2_id || m.loser2_id) ? "double" : "single"
         }));
       }
 
@@ -365,10 +367,12 @@ function useLeagueStoreInternal() {
         id: m.id,
         playerAId: m.winner_id,
         playerBId: m.loser_id,
+        playerA2Id: m.winner2_id ?? undefined,
+        playerB2Id: m.loser2_id ?? undefined,
         scoreA: 21,
         scoreB: 19,
         date: m.created_at || new Date().toISOString(),
-        matchType: "single"
+        matchType: (m.winner2_id || m.loser2_id) ? "double" : "single"
       }));
       list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setMatches(list);
@@ -583,6 +587,8 @@ function useLeagueStoreInternal() {
         try {
           const winnerId = aWon ? playerAId : playerBId;
           const loserId = aWon ? playerBId : playerAId;
+          const winner2Id = (aWon ? playerA2Id : playerB2Id) ?? null;
+          const loser2Id = (aWon ? playerB2Id : playerA2Id) ?? null;
           const playerUpdates = nextStudents
             .filter(s => s.id === playerAId || s.id === playerBId || s.id === playerA2Id || s.id === playerB2Id)
             .map(s => ({ id: s.id, rp: s.rp }));
@@ -592,7 +598,9 @@ function useLeagueStoreInternal() {
             matchId,
             winnerId,
             loserId,
-            playerUpdates
+            playerUpdates,
+            winner2Id,
+            loser2Id
           });
           toast.success("경기가 등록되었습니다!");
         } catch (err: any) {
@@ -2198,8 +2206,10 @@ function useLeagueStoreInternal() {
         const nextAWon = nextScoreA > nextScoreB;
         const winnerId = nextAWon ? playerAId : playerBId;
         const loserId = nextAWon ? playerBId : playerAId;
+        const winner2Id = (nextAWon ? playerA2Id : playerB2Id) ?? null;
+        const loser2Id = (nextAWon ? playerB2Id : playerA2Id) ?? null;
 
-        const { error: updateErr } = await apiUpdateMatchWinnerLoser(matchId, winnerId, loserId);
+        const { error: updateErr } = await apiUpdateMatchWinnerLoser(matchId, winnerId, loserId, winner2Id, loser2Id);
         if (updateErr) throw updateErr;
 
         for (const s of nextStudentsList) {
@@ -2660,10 +2670,12 @@ function useLeagueStoreInternal() {
         id: m.id,
         playerAId: m.winner_id,
         playerBId: m.loser_id,
+        playerA2Id: m.winner2_id ?? undefined,
+        playerB2Id: m.loser2_id ?? undefined,
         scoreA: 21,
         scoreB: 19,
         date: m.created_at || new Date().toISOString(),
-        matchType: "single" as const,
+        matchType: (m.winner2_id || m.loser2_id) ? ("double" as const) : ("single" as const),
       }));
 
       const studentsList: Student[] = (standings || []).map((s: any) => {
