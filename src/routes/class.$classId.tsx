@@ -78,6 +78,15 @@ function Index() {
     }
   }, [classId, loadClassData]);
 
+  const [tab, setTab] = useState<Tab>("leaderboard");
+  const [editingTitle, setEditingTitle] = useState(false);
+  // 화면 잠금: 해제되면 수동 재잠금(또는 새로고침) 전까지 유지
+  const [unlocked, setUnlocked] = useState(false);
+  // 현재 탭이 잠금 대상인지. 코드 미설정 시 fail-open(잠그지 않음).
+  const currentTabLocked = (tab === "leaderboard" && lockLeaderboard) || (tab === "admin" && lockAdmin);
+  const anyLockEnabled = lockLeaderboard || lockAdmin;
+  const showLockGate = currentTabLocked && !!teacherAccessCode && !unlocked && session?.role !== "STUDENT";
+
   // 경기가 필요한 탭에서만 경기를 lazy-load (순위표 등 평소 화면은 경기 미로드)
   useEffect(() => {
     if (!session) return;
@@ -88,15 +97,6 @@ function Index() {
       loadMatches(classId);
     }
   }, [tab, session, classId, currentViewSeason, loadMatches]);
-
-  const [tab, setTab] = useState<Tab>("leaderboard");
-  const [editingTitle, setEditingTitle] = useState(false);
-  // 화면 잠금: 해제되면 수동 재잠금(또는 새로고침) 전까지 유지
-  const [unlocked, setUnlocked] = useState(false);
-  // 현재 탭이 잠금 대상인지. 코드 미설정 시 fail-open(잠그지 않음).
-  const currentTabLocked = (tab === "leaderboard" && lockLeaderboard) || (tab === "admin" && lockAdmin);
-  const anyLockEnabled = lockLeaderboard || lockAdmin;
-  const showLockGate = currentTabLocked && !!teacherAccessCode && !unlocked && session?.role !== "STUDENT";
   const [recommendInitials, setRecommendInitials] = useState<{
     playerAId: string;
     playerBId: string;
