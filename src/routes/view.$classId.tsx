@@ -86,7 +86,7 @@ function RecentDots({ recent, size = "sm" }: { recent: ("W" | "L")[]; size?: "sm
 
 function StudentViewerComponent() {
   const { classId } = Route.useParams();
-  const { students, matches, title, loadClassData, tierThresholds, hydrated, isSyncing,
+  const { students, matches, title, loadClassData, loadMatches, tierThresholds, hydrated, isSyncing,
     seasonList, currentSeason, currentViewSeason, changeViewSeason,
     decaySettings, decayAppliedDates } = useLeagueStore();
 
@@ -106,6 +106,13 @@ function StudentViewerComponent() {
       loadClassData(classId);
     }
   }, [classId, loadClassData]);
+
+  // 학생 카드를 열 때만 경기를 lazy-load (목록 화면은 경기 미로드)
+  useEffect(() => {
+    if (selectedId && classId && currentViewSeason === "현재 시즌") {
+      loadMatches(classId);
+    }
+  }, [selectedId, classId, currentViewSeason, loadMatches]);
 
   const thresholds = tierThresholds || DEFAULT_THRESHOLDS;
 

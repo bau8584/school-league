@@ -34,6 +34,7 @@ import {
   apiInsertStudentsBulk,
   apiRestoreClassData,
   apiRecordMatchTransaction,
+  apiRefreshClassStats,
   apiFetchClassSecret,
   apiUpdateClassSecret,
   apiListSeasons,
@@ -128,6 +129,9 @@ function useLeagueStoreInternal() {
   }, [currentClassId]);
   // 교사 세션 여부(소유자/공동관리자) — 과거 시즌 조회 시 실명 포함 여부 결정에 사용
   const isTeacherRef = useRef(false);
+  // 경기 lazy-load 상태/현재시즌 추적 (성능 최적화: 평소엔 경기 미로드, 컬럼만 사용)
+  const matchesLoadedRef = useRef(false);
+  const currentSeasonRef = useRef<string>("시즌 1");
   const channelRef = useRef<any>(null);
   const loadClassDataRef = useRef<any>(null);
 
@@ -139,7 +143,7 @@ function useLeagueStoreInternal() {
     };
   }, []);
 
-  const loadClassData = useCallback(async (classId: string, isBackground = false) => {
+  const loadClassData = useCallback(async (classId: string, isBackground = false, withMatches = false) => {
     loadClassDataRef.current = loadClassData;
     // 과거 시즌을 보는 중이면 백그라운드(실시간) 재로딩이 현재 시즌 데이터로 덮어쓰지 않도록 막는다.
     if (isBackground && currentViewSeasonRef.current !== "현재 시즌") return;
@@ -202,22 +206,10 @@ function useLeagueStoreInternal() {
         }
       }
 
-      // 2. Fetch matches for this class — 현재 시즌 경기만 (과거 시즌은 changeViewSeason에서 별도 조회)
+      // 2. 현재 시즌 라벨
       const activeSeason = (classData?.settings?.season as string) || "시즌 1";
       setCurrentSeason(activeSeason);
-      const { data: dbMatches, error: matchesErr } = await apiFetchMatches(classId, activeSeason);
-      if (matchesErr) throw matchesErr;
-
-      // Map Supabase matches to frontend Match structure
-      const matchesList: Match[] = (dbMatches || []).map((m: any) => ({
-        id: m.id,
-        playerAId: m.winner_id,
-        playerBId: m.loser_id,
-        scoreA: 21,
-        scoreB: 19,
-        date: m.created_at || new Date().toISOString(),
-        matchType: "single"
-      }));
+      currentSeasonRef.current = activeSeason;
 
       // 3. Fetch students - 관리 권한자(소유자/공동관리자/기록원)는 실명 포함 조회
       const isTeacherSession = isManager;
@@ -244,39 +236,45 @@ function useLeagueStoreInternal() {
       const { data: dbStudents, error: studentsErr } = studentsFetchResult;
       if (studentsErr) throw studentsErr;
 
-      // Map Supabase students to frontend Student structure, computing stats on-the-fly
+      // 4. 경기는 평소엔 불러오지 않음(성능). 이미 로드됐거나 withMatches면 동기화 위해 조회.
+      const shouldLoadMatches = withMatches || matchesLoadedRef.current;
+      let matchesList: Match[] = [];
+      if (shouldLoadMatches) {
+        const { data: dbMatches, error: matchesErr } = await apiFetchMatches(classId, activeSeason);
+        if (matchesErr) throw matchesErr;
+        matchesList = (dbMatches || []).map((m: any) => ({
+          id: m.id,
+          playerAId: m.winner_id,
+          playerBId: m.loser_id,
+          playerA2Id: m.winner2_id ?? undefined,
+          playerB2Id: m.loser2_id ?? undefined,
+          scoreA: 21,
+          scoreB: 19,
+          date: m.created_at || new Date().toISOString(),
+          matchType: (m.winner2_id || m.loser2_id) ? "double" : "single"
+        }));
+      }
+
+      // 5. 학생 매핑: 통계는 저장된 컬럼(win_count/lose_count/recent_matches)에서 읽는다.
       const studentsList: Student[] = (dbStudents || []).map((s: any) => {
         const grade = s.grade ?? 0;
         const classNum = s.class_number ?? 0;
         const number = s.student_no ?? 0;
-        // name은 display_name을 기본으로 하되, 없을 경우 fallback으로 포맷팅
         const name = s.display_name || (s.nickname ?? `${grade}-${classNum}-${number}번`);
         const gender = (s.gender || "U") as Gender;
 
-        // Find matches for this student to compute derived stats
-        const studentMatches = matchesList
-          .filter((m) => m.playerAId === s.id || m.playerBId === s.id)
-          .sort((x, y) => new Date(y.date).getTime() - new Date(x.date).getTime());
+        const recent: ("W" | "L")[] = Array.isArray(s.recent_matches)
+          ? s.recent_matches.filter((r: any) => r === "W" || r === "L")
+          : [];
+        const wins = Number(s.win_count) || 0;
+        const losses = Number(s.lose_count) || 0;
 
-        const wins = studentMatches.filter((m) => m.playerAId === s.id).length;
-        const losses = studentMatches.filter((m) => m.playerBId === s.id).length;
-
-        // Last 5 matches form (W or L)
-        const recent = studentMatches.slice(0, 5).map((m) => (m.playerAId === s.id ? "W" : "L"));
-
-        // Current streak
+        // 연승/연패는 최근 5경기(recent) 기준 근사 — 순위표용. 상세 화면은 경기 로드 후 정확 계산.
         let currentStreak = 0;
-        for (const m of studentMatches) {
-          const won = m.playerAId === s.id;
-          if (currentStreak === 0) {
-            currentStreak = won ? 1 : -1;
-          } else if (currentStreak > 0) {
-            if (won) currentStreak++;
-            else break;
-          } else {
-            if (!won) currentStreak--;
-            else break;
-          }
+        for (const r of recent) {
+          if (currentStreak === 0) currentStreak = r === "W" ? 1 : -1;
+          else if (currentStreak > 0) { if (r === "W") currentStreak++; else break; }
+          else { if (r === "L") currentStreak--; else break; }
         }
 
         return {
@@ -302,9 +300,11 @@ function useLeagueStoreInternal() {
 
       setStudents(studentsList);
 
-      // We reverse matches to show newest first in history
-      const sortedMatches = [...matchesList].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      setMatches(sortedMatches);
+      if (shouldLoadMatches) {
+        const sortedMatches = [...matchesList].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setMatches(sortedMatches);
+        matchesLoadedRef.current = true;
+      }
 
       setCurrentClassId(classId);
 
@@ -351,6 +351,34 @@ function useLeagueStoreInternal() {
     } finally {
       if (!isBackground) setIsSyncing(false);
       setHydrated(true);
+    }
+  }, []);
+
+  // 경기 lazy-load: 경기가 필요한 탭(기록입력/매치추천/관리자/내기록/시즌요약, /view 카드)에서 호출.
+  // 현재 시즌 경기를 1회 불러와 matches 상태를 채운다(이후 realtime 동기화 대상이 됨).
+  const loadMatches = useCallback(async (classIdArg?: string) => {
+    const cid = classIdArg || currentClassIdRef.current;
+    if (!cid) return;
+    if (currentViewSeasonRef.current !== "현재 시즌") return; // 과거 시즌은 changeViewSeason이 처리
+    try {
+      const { data, error } = await apiFetchMatches(cid, currentSeasonRef.current);
+      if (error) throw error;
+      const list: Match[] = (data || []).map((m: any) => ({
+        id: m.id,
+        playerAId: m.winner_id,
+        playerBId: m.loser_id,
+        playerA2Id: m.winner2_id ?? undefined,
+        playerB2Id: m.loser2_id ?? undefined,
+        scoreA: 21,
+        scoreB: 19,
+        date: m.created_at || new Date().toISOString(),
+        matchType: (m.winner2_id || m.loser2_id) ? "double" : "single"
+      }));
+      list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setMatches(list);
+      matchesLoadedRef.current = true;
+    } catch (e) {
+      console.warn("loadMatches failed:", e);
     }
   }, []);
 
@@ -559,6 +587,8 @@ function useLeagueStoreInternal() {
         try {
           const winnerId = aWon ? playerAId : playerBId;
           const loserId = aWon ? playerBId : playerAId;
+          const winner2Id = (aWon ? playerA2Id : playerB2Id) ?? null;
+          const loser2Id = (aWon ? playerB2Id : playerA2Id) ?? null;
           const playerUpdates = nextStudents
             .filter(s => s.id === playerAId || s.id === playerBId || s.id === playerA2Id || s.id === playerB2Id)
             .map(s => ({ id: s.id, rp: s.rp }));
@@ -568,7 +598,9 @@ function useLeagueStoreInternal() {
             matchId,
             winnerId,
             loserId,
-            playerUpdates
+            playerUpdates,
+            winner2Id,
+            loser2Id
           });
           toast.success("경기가 등록되었습니다!");
         } catch (err: any) {
@@ -682,6 +714,8 @@ function useLeagueStoreInternal() {
             await apiUpdateStudentRp(s.id, s.rp);
           }
         }
+        // 통계 컬럼(win_count/lose_count/recent_matches) 재계산
+        if (currentClassId) { try { await apiRefreshClassStats(currentClassId); } catch (e) { console.warn("refresh stats after delete failed", e); } }
         toast.success("경기가 삭제되었습니다!");
       } catch (err: any) {
         console.error("Failed to delete match in Supabase:", err.message);
@@ -2172,8 +2206,10 @@ function useLeagueStoreInternal() {
         const nextAWon = nextScoreA > nextScoreB;
         const winnerId = nextAWon ? playerAId : playerBId;
         const loserId = nextAWon ? playerBId : playerAId;
+        const winner2Id = (nextAWon ? playerA2Id : playerB2Id) ?? null;
+        const loser2Id = (nextAWon ? playerB2Id : playerA2Id) ?? null;
 
-        const { error: updateErr } = await apiUpdateMatchWinnerLoser(matchId, winnerId, loserId);
+        const { error: updateErr } = await apiUpdateMatchWinnerLoser(matchId, winnerId, loserId, winner2Id, loser2Id);
         if (updateErr) throw updateErr;
 
         for (const s of nextStudentsList) {
@@ -2182,6 +2218,7 @@ function useLeagueStoreInternal() {
             if (studErr) throw studErr;
           }
         }
+        if (currentClassId) { try { await apiRefreshClassStats(currentClassId); } catch (e) { console.warn("refresh stats after edit failed", e); } }
         toast.success("경기 결과가 수정 및 재계산되었습니다.");
       } catch (err: any) {
         console.error("Failed to update match score in Supabase:", err.message);
@@ -2633,10 +2670,12 @@ function useLeagueStoreInternal() {
         id: m.id,
         playerAId: m.winner_id,
         playerBId: m.loser_id,
+        playerA2Id: m.winner2_id ?? undefined,
+        playerB2Id: m.loser2_id ?? undefined,
         scoreA: 21,
         scoreB: 19,
         date: m.created_at || new Date().toISOString(),
-        matchType: "single" as const,
+        matchType: (m.winner2_id || m.loser2_id) ? ("double" as const) : ("single" as const),
       }));
 
       const studentsList: Student[] = (standings || []).map((s: any) => {
@@ -2739,6 +2778,7 @@ function useLeagueStoreInternal() {
     setTitle, 
     teacherAccessCode,
     setTeacherAccessCode,
+    loadMatches,
     lockLeaderboard,
     lockAdmin,
     saveLockSetting,
