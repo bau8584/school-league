@@ -291,6 +291,7 @@ function useLeagueStoreInternal() {
           losses,
           recent,
           currentStreak,
+          lastMatchDate: s.last_match_date ?? undefined,
           demotionShields: 3
         };
       });
@@ -825,6 +826,7 @@ function useLeagueStoreInternal() {
             await apiUpdateStudentRp(s.id, s.rp);
           }
         }
+        if (currentClassId) { try { await apiRefreshClassStats(currentClassId); } catch (e) { console.warn("refresh stats after reset failed", e); } }
         toast.success("선수의 전적이 초기화되었습니다!");
       } catch (err: any) {
         console.error("Failed to reset student in Supabase:", err.message);
@@ -1283,6 +1285,7 @@ function useLeagueStoreInternal() {
             await apiUpdateStudentRp(s.id, s.rp);
           }
         }
+        if (currentClassId) { try { await apiRefreshClassStats(currentClassId); } catch (e) { console.warn("refresh stats after student delete failed", e); } }
         toast.success("선수가 삭제되었습니다!");
       } catch (err: any) {
         console.error("Failed to delete student in Supabase:", err.message);
