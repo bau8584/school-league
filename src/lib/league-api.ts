@@ -183,6 +183,7 @@ export async function apiInsertStudent(classId: string, info: {
       grade: info.grade,
       class_number: info.class_number,
       student_no: info.student_no,
+      student_name: info.real_name,  // student_name(NOT NULL 레거시 컬럼) 함께 채움
       real_name: info.real_name,
       nickname: info.nickname ?? null,
       gender: info.gender ?? "U"
