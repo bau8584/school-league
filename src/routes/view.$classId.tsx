@@ -354,8 +354,9 @@ function StudentPicker({
                           style.bg.replace("/15", ""),
                         )}
                       />
-                      <div className="flex items-center justify-between gap-2 relative z-10">
+                      <div className="flex items-center justify-between gap-1.5 relative z-10">
                         <GenderMark gender={s.gender} />
+                        <span className="text-[10px] font-semibold text-muted-foreground whitespace-nowrap">{s.grade}학년 {s.classNum}반</span>
                         <TierBadge rp={s.rp} thresholds={thresholds} />
                       </div>
                       <div className="flex flex-col items-center gap-1 py-2 relative z-10">
@@ -365,9 +366,6 @@ function StudentPicker({
                         {s.nickname && s.nickname.trim() ? (
                           <span className="text-xs font-semibold text-muted-foreground">{studentNo(s)}</span>
                         ) : null}
-                      </div>
-                      <div className="flex justify-center relative z-10">
-                        <RecentDots recent={s.recent} />
                       </div>
                     </button>
                   );
