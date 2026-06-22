@@ -138,6 +138,7 @@ function useLeagueStoreInternal() {
 
   useEffect(() => {
     return () => {
+      if (realtimeTimerRef.current) clearTimeout(realtimeTimerRef.current);
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
       }
@@ -305,6 +306,11 @@ function useLeagueStoreInternal() {
           recent,
           currentStreak,
           lastMatchDate: s.last_match_date ?? undefined,
+          // firstWin 보너스 판정용: 마지막 승리일을 로컬 YYYY-MM-DD 로 (todayYmd와 동일 포맷)
+          lastWinDate: s.last_win_date
+            ? new Date(new Date(s.last_win_date).getTime() - new Date(s.last_win_date).getTimezoneOffset() * 60000)
+                .toISOString().split("T")[0]
+            : undefined,
           demotionShields: 3
         };
       });
@@ -337,6 +343,7 @@ function useLeagueStoreInternal() {
       }
 
       // Realtime subscription setup
+      if (realtimeTimerRef.current) clearTimeout(realtimeTimerRef.current);
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
@@ -532,6 +539,14 @@ function useLeagueStoreInternal() {
     }
     if (playerAId === playerBId) return;
 
+    // 보너스(복수/신선도 등)는 과거 경기 목록이 있어야 정확히 계산된다.
+    // 아직 경기가 로드되지 않았으면 잘못된 RP가 기록되므로 막고, 로드를 시작한다.
+    if (currentViewSeasonRef.current === "현재 시즌" && !matchesLoadedRef.current) {
+      toast.error("경기 데이터를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.", { id: "matches-not-loaded" });
+      loadMatches(currentClassId || undefined);
+      return;
+    }
+
     isSyncingRef.current = true;
     setIsSyncing(true);
     const aWon = scoreA > scoreB;
@@ -551,6 +566,8 @@ function useLeagueStoreInternal() {
         id: "student-not-synced-error",
         duration: 5000
       });
+      isSyncingRef.current = false;
+      setIsSyncing(false);
       return;
     }
 
@@ -1867,7 +1884,6 @@ function useLeagueStoreInternal() {
     const todayStr = localToday.toISOString().split("T")[0];
 
     if (lastDecayDate === todayStr) {
-      console.log("Auto decay already processed for today:", todayStr);
       return;
     }
 

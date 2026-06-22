@@ -30,3 +30,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Scratch / 임시 디버그 스크립트
+scratch/
+vercel.json

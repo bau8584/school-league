@@ -116,8 +116,7 @@ export function RecordMatch({
   const [countUpDone, setCountUpDone] = useState(false);
 
   // SFX Player Placeholder Hook
-  const playSoundEffect = (type: "victory" | "defeat" | "stamp" | "countup" | "total") => {
-    console.log(`[SFX Play] ${type}`);
+  const playSoundEffect = (_type: "victory" | "defeat" | "stamp" | "countup" | "total") => {
     // Future expansion: hook up to local sound files (e.g. victory.mp3, stamp.mp3)
     // const audio = new Audio(`/sounds/${type}.mp3`);
     // audio.play().catch(() => {});

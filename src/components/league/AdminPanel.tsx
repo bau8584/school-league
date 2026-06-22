@@ -47,7 +47,7 @@ const ADMIN_MENU_ITEMS = [
   { id: "settings", label: "리그 글로벌 설정", icon: Settings, desc: "리그 이름, 티어, RP 규칙 설정" },
   { id: "studentRegister", label: "학생 등록", icon: UserPlus, desc: "나이스 명렬표 대량 등록" },
   { id: "studentManage", label: "학생 관리", icon: User, desc: "학급 명단, RP 수정 및 삭제" },
-  { id: "matchRecords", label: "리그 기록 관리", icon: Swords, desc: "전체 경기 조회, 점수 수정/삭제" },
+  { id: "matchRecords", label: "리그 기록 관리", icon: Swords, desc: "전체 경기 조회 및 삭제(롤백)" },
   { id: "dataManage", label: "데이터 관리", icon: Database, desc: "JSON 백업 다운로드 및 복원" },
   { id: "seasonManage", label: "시즌 관리", icon: Calendar, desc: "시즌 초기화 및 신규 시즌 생성" },
 ] as const;

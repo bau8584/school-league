@@ -115,7 +115,7 @@ export async function apiInsertMatchesBulk(matches: MatchInsert[]) {
 export async function apiFetchStudents(classId: string) {
   return supabase
     .from("students")
-    .select("id, class_id, rp, tier, win_count, lose_count, nickname, real_name, grade, class_number, student_no, gender, is_deleted, recent_matches, display_name, last_match_date")
+    .select("id, class_id, rp, tier, win_count, lose_count, nickname, real_name, grade, class_number, student_no, gender, is_deleted, recent_matches, display_name, last_match_date, last_win_date")
     .eq("class_id", classId)
     .or("is_deleted.is.null,is_deleted.eq.false");
 }

@@ -23,6 +23,7 @@ type StudentRow = {
   gender: string | null;
   display_name: string | null;
   last_match_date: string | null;
+  last_win_date: string | null;
 };
 
 type MatchRow = {
