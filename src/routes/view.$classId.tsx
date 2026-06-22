@@ -2,12 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useLeagueStore } from "@/lib/league-store";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { TierBadge } from "@/components/league/TierBadge";
 import { GenderMark } from "@/components/league/GenderMark";
 import { MyAchievements } from "@/components/league/MyAchievements";
 import { SeasonSummary } from "@/components/league/SeasonSummary";
 import { StudentCardSettings } from "@/components/league/StudentCardSettings";
+import { MatchRecommend } from "@/components/league/MatchRecommend";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -18,7 +18,7 @@ import {
   type Match,
   type DecaySettingsRecord,
 } from "@/lib/league-types";
-import { Trophy, Search, ChevronLeft, TrendingUp, Medal, Calendar, Settings, Hourglass } from "lucide-react";
+import { Trophy, ChevronLeft, TrendingUp, Medal, Calendar, Settings, Hourglass, Target, BarChart3 } from "lucide-react";
 
 export const Route = createFileRoute("/view/$classId")({
   component: StudentViewerComponent,
@@ -91,7 +91,6 @@ function StudentViewerComponent() {
     decaySettings, decayAppliedDates } = useLeagueStore();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
   const [showSummary, setShowSummary] = useState(false);
   const isPastSeason = currentViewSeason !== "현재 시즌";
 
@@ -115,21 +114,6 @@ function StudentViewerComponent() {
   }, [selectedId, classId, currentViewSeason, loadMatches]);
 
   const thresholds = tierThresholds || DEFAULT_THRESHOLDS;
-
-  // 번호순(학년-반-번호) 중립 정렬 — 등수 느낌을 주지 않기 위함
-  const orderedStudents = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    return [...students]
-      .filter((s) => {
-        if (!q) return true;
-        return (
-          s.name.toLowerCase().includes(q) ||
-          String(s.number).includes(q) ||
-          `${s.grade}-${s.classNum}-${s.number}`.includes(q)
-        );
-      })
-      .sort((a, b) => a.grade - b.grade || a.classNum - b.classNum || a.number - b.number);
-  }, [students, searchQuery]);
 
   const selectedStudent = useMemo(
     () => students.find((s) => s.id === selectedId) ?? null,
@@ -246,10 +230,8 @@ function StudentViewerComponent() {
               </div>
             )}
             <StudentPicker
-              students={orderedStudents}
+              students={students}
               thresholds={thresholds}
-              searchQuery={searchQuery}
-              onSearch={setSearchQuery}
               onSelect={setSelectedId}
             />
           </>
@@ -269,86 +251,130 @@ function StudentViewerComponent() {
 function StudentPicker({
   students,
   thresholds,
-  searchQuery,
-  onSearch,
   onSelect,
 }: {
   students: Student[];
   thresholds: Record<TierName, number>;
-  searchQuery: string;
-  onSearch: (v: string) => void;
   onSelect: (id: string) => void;
 }) {
+  const [grade, setGrade] = useState<number | null>(null);
+  const [classNum, setClassNum] = useState<number | null>(null);
+
+  const grades = useMemo(() => {
+    const set = new Set<number>();
+    students.forEach((s) => { if (s.grade) set.add(s.grade); });
+    return Array.from(set).sort((a, b) => a - b);
+  }, [students]);
+
+  const classes = useMemo(() => {
+    if (grade == null) return [];
+    const set = new Set<number>();
+    students.filter((s) => s.grade === grade).forEach((s) => set.add(s.classNum));
+    return Array.from(set).sort((a, b) => a - b);
+  }, [students, grade]);
+
+  const roster = useMemo(() => {
+    if (grade == null || classNum == null) return [];
+    return students
+      .filter((s) => s.grade === grade && s.classNum === classNum)
+      .sort((a, b) => a.number - b.number);
+  }, [students, grade, classNum]);
+
+  const ChipBtn = ({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) => (
+    <button
+      onClick={onClick}
+      className={cn(
+        "rounded-xl border px-3 py-2.5 text-sm font-bold transition-all active:scale-95 cursor-pointer",
+        active
+          ? "border-neon-blue/60 bg-neon-blue/15 text-neon-blue shadow-[0_0_14px_oklch(0.78_0.18_230/0.35)]"
+          : "border-border/60 bg-card/60 text-muted-foreground hover:text-foreground hover:bg-accent/40",
+      )}
+    >
+      {children}
+    </button>
+  );
+
   return (
     <div className="space-y-5 animate-in fade-in duration-300">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-black tracking-tight text-foreground">나의 카드를 찾아 눌러주세요</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            번호순으로 정렬되어 있어요. 총 {students.length}명
-          </p>
-        </div>
-        <div className="relative w-full sm:w-72">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={(e) => onSearch(e.target.value)}
-            placeholder="번호 또는 별명으로 찾기..."
-            className="h-10 border-border/60 bg-card/60 pl-9 text-sm"
-          />
-        </div>
+      <div>
+        <h2 className="text-lg font-black tracking-tight text-foreground">나의 카드를 찾아주세요</h2>
+        <p className="text-xs text-muted-foreground mt-0.5">학년 → 반을 고르면 우리 반 친구들이 나와요.</p>
       </div>
 
       {students.length === 0 ? (
         <Card className="border-border/60 bg-card/60 p-12 text-center backdrop-blur-xl">
-          <p className="text-sm text-muted-foreground">
-            {searchQuery ? "검색 결과가 없습니다." : "아직 등록된 학생이 없습니다."}
-          </p>
+          <p className="text-sm text-muted-foreground">아직 등록된 학생이 없습니다.</p>
         </Card>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-          {students.map((s) => {
-            const tier = getTier(s.rp, thresholds);
-            const style = TIER_STYLES[tier];
-            return (
-              <button
-                key={s.id}
-                onClick={() => onSelect(s.id)}
-                className={cn(
-                  "group relative flex flex-col gap-3 rounded-2xl border bg-card/60 p-4 text-left backdrop-blur-xl transition-all",
-                  "hover:scale-[1.03] hover:bg-card/80 active:scale-100 cursor-pointer",
-                  style.ring,
-                  "ring-1",
-                )}
-              >
-                {/* 은은한 티어 색상 글로우 */}
-                <div
-                  className={cn(
-                    "absolute -top-10 -right-10 size-24 rounded-full blur-[50px] opacity-20 pointer-events-none",
-                    style.bg.replace("/15", ""),
-                  )}
-                />
+        <div className="space-y-5">
+          {/* 1단계: 학년 */}
+          <div>
+            <div className="mb-2 text-sm font-extrabold text-muted-foreground">학년</div>
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
+              {grades.map((g) => (
+                <ChipBtn key={g} active={grade === g} onClick={() => { setGrade(g); setClassNum(null); }}>{g}학년</ChipBtn>
+              ))}
+            </div>
+          </div>
 
-                <div className="flex items-center justify-between gap-2 relative z-10">
-                  <GenderMark gender={s.gender} />
-                  <TierBadge rp={s.rp} thresholds={thresholds} />
-                </div>
+          {/* 2단계: 반 */}
+          {grade != null && (
+            <div>
+              <div className="mb-2 text-sm font-extrabold text-muted-foreground">반</div>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
+                {classes.map((c) => (
+                  <ChipBtn key={c} active={classNum === c} onClick={() => setClassNum(c)}>{c}반</ChipBtn>
+                ))}
+              </div>
+            </div>
+          )}
 
-                <div className="flex flex-col items-center gap-1 py-2 relative z-10">
-                  <span className="text-2xl font-black tracking-tight text-foreground text-center break-keep line-clamp-2">
-                    {displayIdentity(s)}
-                  </span>
-                  {s.nickname && s.nickname.trim() ? (
-                    <span className="text-xs font-semibold text-muted-foreground">{studentNo(s)}</span>
-                  ) : null}
-                </div>
-
-                <div className="flex justify-center relative z-10">
-                  <RecentDots recent={s.recent} />
-                </div>
-              </button>
-            );
-          })}
+          {/* 3단계: 학생 카드 */}
+          {classNum != null && (
+            <div>
+              <div className="mb-2 text-sm font-extrabold text-muted-foreground">나의 카드</div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+                {roster.map((s) => {
+                  const tier = getTier(s.rp, thresholds);
+                  const style = TIER_STYLES[tier];
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => onSelect(s.id)}
+                      className={cn(
+                        "group relative flex flex-col gap-3 rounded-2xl border bg-card/60 p-4 text-left backdrop-blur-xl transition-all",
+                        "hover:scale-[1.03] hover:bg-card/80 active:scale-100 cursor-pointer",
+                        style.ring,
+                        "ring-1",
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "absolute -top-10 -right-10 size-24 rounded-full blur-[50px] opacity-20 pointer-events-none",
+                          style.bg.replace("/15", ""),
+                        )}
+                      />
+                      <div className="flex items-center justify-between gap-2 relative z-10">
+                        <GenderMark gender={s.gender} />
+                        <TierBadge rp={s.rp} thresholds={thresholds} />
+                      </div>
+                      <div className="flex flex-col items-center gap-1 py-2 relative z-10">
+                        <span className="text-2xl font-black tracking-tight text-foreground text-center break-keep line-clamp-2">
+                          {displayIdentity(s)}
+                        </span>
+                        {s.nickname && s.nickname.trim() ? (
+                          <span className="text-xs font-semibold text-muted-foreground">{studentNo(s)}</span>
+                        ) : null}
+                      </div>
+                      <div className="flex justify-center relative z-10">
+                        <RecentDots recent={s.recent} />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -383,6 +409,24 @@ function StudentDashboard({
 }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const currentTier = getTier(student.rp, thresholds);
+
+  // 개인 대시보드 탭: 내 기록 / 매치 추천
+  const [tab, setTab] = useState<"record" | "recommend">("record");
+  // 매치 추천(학생 시점): 본인을 고정 분석 대상으로, 상대 범위만 선택
+  const recSel = useMemo(
+    () => ({ grade: student.grade, classNum: student.classNum, studentId: student.id }),
+    [student.grade, student.classNum, student.id],
+  );
+  const [recMode, setRecMode] = useState<"class" | "otherClass" | "otherGrade">("class");
+  const [recTargetGrade, setRecTargetGrade] = useState<number | null>(null);
+  const [recTargetClass, setRecTargetClass] = useState<number | null>(null);
+  // 학생을 바꿔 들어오면 추천 탭 상태 초기화
+  useEffect(() => {
+    setTab("record");
+    setRecMode("class");
+    setRecTargetGrade(null);
+    setRecTargetClass(null);
+  }, [student.id]);
 
   // 휴면 감점 카운트다운 (사이클당 1회 차감 기준). 과거 시즌 열람(readOnly)에서는 숨김.
   // students_public 뷰에는 lastMatchDate가 없으므로 matches에서 마지막 경기일을 직접 계산한다.
@@ -467,6 +511,38 @@ function StudentDashboard({
         />
       )}
 
+      {/* 탭: 내 기록 / 매치 추천 */}
+      <div className="flex gap-1 overflow-x-auto">
+        <ViewToggle active={tab === "record"} onClick={() => setTab("record")}>
+          <span className="inline-flex items-center gap-1.5"><BarChart3 className="size-4" /> 내 기록</span>
+        </ViewToggle>
+        {!readOnly && (
+          <ViewToggle active={tab === "recommend"} onClick={() => setTab("recommend")}>
+            <span className="inline-flex items-center gap-1.5"><Target className="size-4" /> 매치 추천</span>
+          </ViewToggle>
+        )}
+      </div>
+
+      {tab === "recommend" && !readOnly && (
+        <MatchRecommend
+          students={students}
+          matches={matches}
+          onSelectRecommendedMatch={() => {}}
+          sel={recSel}
+          onSelChange={() => {}}
+          mode={recMode}
+          onModeChange={setRecMode}
+          targetGrade={recTargetGrade}
+          onTargetGradeChange={setRecTargetGrade}
+          targetClass={recTargetClass}
+          onTargetClassChange={setRecTargetClass}
+          thresholds={thresholds}
+          isStudentView={true}
+          isReadOnly={true}
+        />
+      )}
+
+      {tab === "record" && (<>
       {/* 프로필 + 티어 진행도 */}
       <Card className="relative overflow-hidden border-border/60 bg-card/45 p-6 backdrop-blur-xl shadow-lg">
         <div
@@ -634,6 +710,7 @@ function StudentDashboard({
 
       {/* 업적 (기존 컴포넌트 재사용 — RP/승률 노출 없음) */}
       <MyAchievements studentId={student.id} />
+      </>)}
     </div>
   );
 }

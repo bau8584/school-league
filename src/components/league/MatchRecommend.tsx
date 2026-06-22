@@ -91,8 +91,9 @@ export function MatchRecommend({
   const [genderModalOpen, setGenderModalOpen] = useState(false);
   const [genderTargetId, setGenderTargetId] = useState<string | null>(null);
 
-  // A선수 선택 시 성별이 "U"이거나 없을 때 모달 팝업 트리거
+  // A선수 선택 시 성별이 "U"이거나 없을 때 모달 팝업 트리거 (학생 전용 화면에서는 성별 편집 불가 → 비활성)
   useEffect(() => {
+    if (isStudentView) return;
     if (sel.studentId) {
       const selectedStudent = students.find((s) => s.id === sel.studentId);
       if (selectedStudent && (selectedStudent.gender === "U" || !selectedStudent.gender)) {
@@ -100,10 +101,11 @@ export function MatchRecommend({
         setGenderModalOpen(true);
       }
     }
-  }, [sel.studentId, students]);
+  }, [sel.studentId, students, isStudentView]);
 
   // 성별 보완 모달 트리거 (Teammate 선택 시에도 성별 체크)
   useEffect(() => {
+    if (isStudentView) return;
     if (selectedTeammateId) {
       const partner = students.find((s) => s.id === selectedTeammateId);
       if (partner && (partner.gender === "U" || !partner.gender)) {
@@ -111,7 +113,7 @@ export function MatchRecommend({
         setGenderModalOpen(true);
       }
     }
-  }, [selectedTeammateId, students]);
+  }, [selectedTeammateId, students, isStudentView]);
 
   const handleUpdateGender = (gender: "M" | "F") => {
     if (genderTargetId) {
