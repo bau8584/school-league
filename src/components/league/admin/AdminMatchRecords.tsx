@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Swords, Search, Calendar, Users, Pencil, Trash2, ShieldAlert } from "lucide-react";
+import { Swords, Search, Calendar, Users, Trash2, ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Gender, Student, Match } from "@/lib/league-types";
 import { GenderMark } from "../GenderMark";
@@ -22,22 +22,15 @@ export interface AdminMatchRecordsProps {
   students: Student[];
   matches: Match[];
   onDeleteMatch: (matchId: string) => void;
-  onUpdateMatchScore: (matchId: string, scoreA: number, scoreB: number) => void;
 }
 
 export function AdminMatchRecords({
   students,
   matches,
   onDeleteMatch,
-  onUpdateMatchScore,
 }: AdminMatchRecordsProps) {
   // 교사 관리자 화면에서는 실명을 우선 표시 (교사 코드 보안으로 접근 통제 예정)
   const displayName = (p: { name: string; realName?: string }) => p.realName || p.name;
-
-  // Score editor states
-  const [editingMatchId, setEditingMatchId] = useState<string | null>(null);
-  const [editScoreA, setEditScoreA] = useState<string>("");
-  const [editScoreB, setEditScoreB] = useState<string>("");
 
   // 경기 삭제 확인 다이얼로그 (window.confirm 대체)
   const [pendingDelete, setPendingDelete] = useState<{ id: string; desc: string } | null>(null);
@@ -62,24 +55,6 @@ export function AdminMatchRecords({
   const [appliedSearchStudent, setAppliedSearchStudent] = useState("");
   const [appliedSearchDate, setAppliedSearchDate] = useState("");
   const [appliedSearchGradeClass, setAppliedSearchGradeClass] = useState("");
-
-  const handleSaveScoreEdit = () => {
-    if (!editingMatchId) return;
-    const sA = parseInt(editScoreA, 10);
-    const sB = parseInt(editScoreB, 10);
-
-    if (isNaN(sA) || sA < 0 || isNaN(sB) || sB < 0) {
-      return toast.error("올바른 점수 값을 입력해 주세요 (0점 이상).");
-    }
-
-    if (sA === sB) {
-      return toast.error("경기는 동점으로 끝날 수 없습니다. 승패가 결정되는 점수를 입력해 주세요.");
-    }
-
-    onUpdateMatchScore(editingMatchId, sA, sB);
-    setEditingMatchId(null);
-    toast.success("경기 점수가 수정되었으며 두 학생의 보너스 및 최종 RP가 오차 없이 즉시 재계산되어 덮어씌워졌습니다!");
-  };
 
   // Filtered matches logic
   const filteredMatches = useMemo(() => {
@@ -215,7 +190,7 @@ export function AdminMatchRecords({
             <h3 className="font-black text-lg">리그 기록 관리</h3>
           </div>
           <p className="mt-1 text-sm text-muted-foreground text-muted-foreground/85">
-            리그에 기록된 모든 매치 데이터를 조회하고, 경기 점수를 소급 수정하거나 완전 삭제하여 RP 및 전적을 안전하게 롤백 복원합니다.
+            리그에 기록된 모든 매치 데이터를 조회하고, 잘못된 경기는 삭제하여 RP 및 전적을 안전하게 롤백 복원합니다. (점수 정정은 해당 경기를 삭제 후 다시 입력하세요.)
           </p>
         </div>
 
@@ -501,21 +476,6 @@ export function AdminMatchRecords({
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
-                          {/* Score Edit */}
-                          <Button
-                            onClick={() => {
-                              setEditingMatchId(m.id);
-                              setEditScoreA(m.scoreA.toString());
-                              setEditScoreB(m.scoreB.toString());
-                            }}
-                            variant="outline"
-                            size="sm"
-                            className="h-8 px-2.5 rounded-lg border-border/80 text-foreground hover:bg-accent/40 active:scale-95 transition-all text-[11px] font-bold"
-                            title="경기 점수 수정"
-                          >
-                            <Pencil className="size-3.5 mr-1" /> 수정
-                          </Button>
-
                           {/* Delete & Rollback */}
                           <Button
                             onClick={() => requestDeleteMatch(m, playerA, playerB, playerA2, playerB2, aWon)}
@@ -610,18 +570,6 @@ export function AdminMatchRecords({
 
                   <div className="flex items-center justify-end gap-2 pt-0.5">
                     <Button
-                      onClick={() => {
-                        setEditingMatchId(m.id);
-                        setEditScoreA(m.scoreA.toString());
-                        setEditScoreB(m.scoreB.toString());
-                      }}
-                      variant="outline"
-                      size="sm"
-                      className="h-8 px-3 rounded-lg border-border/80 text-foreground active:scale-95 text-[11px] font-bold"
-                    >
-                      <Pencil className="size-3.5 mr-1" /> 수정
-                    </Button>
-                    <Button
                       onClick={() => requestDeleteMatch(m, playerA, playerB, playerA2, playerB2, aWon)}
                       variant="ghost"
                       size="sm"
@@ -644,66 +592,6 @@ export function AdminMatchRecords({
           )}
         </div>
       </Card>
-
-      {/* Inline Score Edit Modal Overlaid */}
-      {editingMatchId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <Card className="max-w-sm w-full border border-border/80 bg-background p-6 shadow-2xl rounded-2xl relative z-50 animate-in zoom-in-95 duration-200">
-            <h4 className="text-base font-black mb-1 flex items-center gap-1.5 text-foreground">
-              <Pencil className="size-4.5 text-neon-blue" /> 경기 세부 점수 수정
-            </h4>
-            <p className="text-xs text-muted-foreground leading-relaxed mb-4">
-              경기 결과를 수정하면 바뀐 점수를 기반으로 점수차 비례 보상 등의 보너스 및 최종 RP가 오차 없이 다시 자동 계산되어 두 학생에게 즉시 덮어씌워집니다.
-            </p>
-
-            <div className="grid grid-cols-2 gap-4 bg-muted/20 p-4 rounded-xl border border-border/30 mb-5">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
-                  A 선수 점수
-                </label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={editScoreA}
-                  onChange={(e) => setEditScoreA(e.target.value)}
-                  className="font-mono font-bold text-center text-lg h-12 bg-background"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
-                  B 선수 점수
-                </label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={editScoreB}
-                  onChange={(e) => setEditScoreB(e.target.value)}
-                  className="font-mono font-bold text-center text-lg h-12 bg-background"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                onClick={() => setEditingMatchId(null)}
-                variant="outline"
-                className="w-1/2 h-10 font-bold border-border/80 text-foreground rounded-xl"
-              >
-                취소
-              </Button>
-              <Button
-                type="button"
-                onClick={handleSaveScoreEdit}
-                className="w-1/2 h-10 font-black bg-neon-blue text-primary-foreground hover:opacity-90 rounded-xl"
-              >
-                저장 및 재계산
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
 
       {/* 경기 삭제 확인 다이얼로그 */}
       <AlertDialog open={!!pendingDelete} onOpenChange={(o) => { if (!o) setPendingDelete(null); }}>

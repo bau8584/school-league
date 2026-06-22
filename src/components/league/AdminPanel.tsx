@@ -105,7 +105,6 @@ export function AdminPanel({
   onRestoreFromCSV,
   onBulkDecay,
   teacherAccessCode,
-  onUpdateMatchScore,
   title,
   activeBonuses,
   onSaveLeagueSettings,
@@ -131,7 +130,6 @@ export function AdminPanel({
   onRestoreFromCSV?: (students: Student[], matches: Match[]) => void;
   onBulkDecay?: (inactiveDays: number, decayAmount: number) => Promise<number> | number | any;
   teacherAccessCode?: string;
-  onUpdateMatchScore: (matchId: string, scoreA: number, scoreB: number) => void;
   title?: string;
   activeBonuses?: ActiveBonuses;
   onSaveLeagueSettings?: (
@@ -453,7 +451,6 @@ export function AdminPanel({
             students={students}
             matches={matches}
             onDeleteMatch={onDeleteMatch}
-            onUpdateMatchScore={onUpdateMatchScore}
           />
         )}
 

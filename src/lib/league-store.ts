@@ -156,18 +156,30 @@ function useLeagueStoreInternal() {
       // 권한 판별: 소유자(owner) / 관리자(owner|co_admin|scorekeeper)
       let isOwner = false;
       let isManager = false;
+      let resolvedUser = false;
       try {
         const { data: { user } } = await apiGetUser();
-        if (user && classData) {
-          const uid = user.id;
-          isOwner = classData.owner_uid === uid;
-          isManager = isOwner
-            || (Array.isArray(classData.co_admin_uids) && classData.co_admin_uids.includes(uid))
-            || (Array.isArray(classData.scorekeeper_uids) && classData.scorekeeper_uids.includes(uid));
+        if (user) {
+          resolvedUser = true;
+          if (classData) {
+            const uid = user.id;
+            isOwner = classData.owner_uid === uid;
+            isManager = isOwner
+              || (Array.isArray(classData.co_admin_uids) && classData.co_admin_uids.includes(uid))
+              || (Array.isArray(classData.scorekeeper_uids) && classData.scorekeeper_uids.includes(uid));
+          }
         }
       } catch (err) {
         console.warn("Failed to check owner uid inside loadClassData:", err);
       }
+
+      // 인증이 순간적으로 풀린 경우(주로 다른 기기 입력에 의한 실시간 백그라운드 재로드):
+      // 권한 플래그를 강등하거나 비교사 데이터/빈 코드로 덮어쓰지 않도록 이 재로드를 건너뛴다.
+      // (관리자 탭이 잠시 튕기던 버그 방지 — 기존 상태 그대로 유지)
+      if (!resolvedUser && isBackground) {
+        return;
+      }
+
       setIsClassOwner(isOwner);
       setIsClassManager(isManager);
       isClassManagerRef.current = isManager;

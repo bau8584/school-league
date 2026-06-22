@@ -57,7 +57,6 @@ function Index() {
     updateStudentInfo,
     restoreFromCSV,
     bulkDecayRP,
-    updateMatchScore,
     activeBonuses,
     saveLeagueSettings,
     promotionEvent,
@@ -509,7 +508,6 @@ function Index() {
             onUpdateStudentInfo={updateStudentInfo}
             onRestoreFromCSV={restoreFromCSV}
             onBulkDecay={bulkDecayRP}
-            onUpdateMatchScore={updateMatchScore}
             title={title}
             activeBonuses={activeBonuses}
             onSaveLeagueSettings={saveLeagueSettings}
