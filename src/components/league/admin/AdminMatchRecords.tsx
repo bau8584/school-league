@@ -35,7 +35,7 @@ export function AdminMatchRecords({
   // 경기 삭제 확인 다이얼로그 (window.confirm 대체)
   const [pendingDelete, setPendingDelete] = useState<{ id: string; desc: string } | null>(null);
 
-  const requestDeleteMatch = (m: Match, playerA: { name: string }, playerB: { name: string }, playerA2: { name: string } | null, playerB2: { name: string } | null, aWon: boolean) => {
+  const requestDeleteMatch = (m: Match, playerA: { name: string }, playerB: { name: string }, playerA2: { name: string } | null | undefined, playerB2: { name: string } | null | undefined, aWon: boolean) => {
     const deltaWinner = aWon ? (m.rpDeltaA !== undefined ? Math.abs(m.rpDeltaA) : 25) : (m.rpDeltaB !== undefined ? Math.abs(m.rpDeltaB) : 25);
     const deltaLoser = !aWon ? (m.rpDeltaA !== undefined ? Math.abs(m.rpDeltaA) : 20) : (m.rpDeltaB !== undefined ? Math.abs(m.rpDeltaB) : 20);
     const playersA = playerA2 ? `${displayName(playerA)} & ${displayName(playerA2)}` : displayName(playerA);

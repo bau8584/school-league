@@ -1,4 +1,9 @@
 import { supabase } from "../supabaseClient";
+import type {
+  StudentInsert,
+  MatchInsert, MatchUpdate,
+  ClassUpdate, ClassSecretUpdate,
+} from "./database.types";
 
 // --- Auth API ---
 export async function apiGetUser() {
@@ -27,16 +32,18 @@ export async function apiFetchClassSettings(classId: string) {
 }
 
 export async function apiUpdateClassSettings(classId: string, settings: any) {
+  const payload: ClassUpdate = { settings };
   return supabase
     .from("classes")
-    .update({ settings })
+    .update(payload)
     .eq("id", classId);
 }
 
 export async function apiUpdateClassSettingsAndName(classId: string, className: string, settings: any) {
+  const payload: ClassUpdate = { class_name: className, settings };
   return supabase
     .from("classes")
-    .update({ class_name: className, settings })
+    .update(payload)
     .eq("id", classId);
 }
 
@@ -66,13 +73,14 @@ export async function apiFetchMatches(classId: string, season?: string) {
 }
 
 export async function apiInsertMatch(classId: string, winnerId: string, loserId: string) {
+  const row: MatchInsert = {
+    class_id: classId,
+    winner_id: winnerId,
+    loser_id: loserId
+  };
   return supabase
     .from("matches")
-    .insert({
-      class_id: classId,
-      winner_id: winnerId,
-      loser_id: loserId
-    });
+    .insert(row);
 }
 
 export async function apiDeleteMatch(matchId: string) {
@@ -96,7 +104,7 @@ export async function apiDeleteClassMatches(classId: string) {
     .eq("class_id", classId);
 }
 
-export async function apiInsertMatchesBulk(matches: any[]) {
+export async function apiInsertMatchesBulk(matches: MatchInsert[]) {
   return supabase
     .from("matches")
     .insert(matches);
@@ -111,16 +119,17 @@ export async function apiUpdateMatchWinnerLoser(
   winnerScore?: number | null,
   loserScore?: number | null
 ) {
+  const payload: MatchUpdate = {
+    winner_id: winnerId,
+    loser_id: loserId,
+    winner2_id: winner2Id ?? null,
+    loser2_id: loser2Id ?? null,
+    winner_score: winnerScore ?? null,
+    loser_score: loserScore ?? null
+  };
   return supabase
     .from("matches")
-    .update({
-      winner_id: winnerId,
-      loser_id: loserId,
-      winner2_id: winner2Id ?? null,
-      loser2_id: loser2Id ?? null,
-      winner_score: winnerScore ?? null,
-      loser_score: loserScore ?? null
-    })
+    .update(payload)
     .eq("id", matchId);
 }
 
@@ -187,19 +196,20 @@ export async function apiInsertStudent(classId: string, info: {
   gender?: string;
   rp?: number;
 }) {
+  const row: StudentInsert = {
+    class_id: classId,
+    rp: info.rp ?? 1000,
+    grade: info.grade,
+    class_number: info.class_number,
+    student_no: info.student_no,
+    student_name: info.real_name,  // student_name(NOT NULL 레거시 컬럼) 함께 채움
+    real_name: info.real_name,
+    nickname: info.nickname ?? null,
+    gender: info.gender ?? "U"
+  };
   return supabase
     .from("students")
-    .insert({
-      class_id: classId,
-      rp: info.rp ?? 1000,
-      grade: info.grade,
-      class_number: info.class_number,
-      student_no: info.student_no,
-      student_name: info.real_name,  // student_name(NOT NULL 레거시 컬럼) 함께 채움
-      real_name: info.real_name,
-      nickname: info.nickname ?? null,
-      gender: info.gender ?? "U"
-    })
+    .insert(row)
     .select("id")
     .single();
 }
@@ -258,7 +268,7 @@ export async function apiDeleteClassStudents(classId: string) {
     .eq("class_id", classId);
 }
 
-export async function apiInsertStudentsBulk(students: any[]) {
+export async function apiInsertStudentsBulk(students: StudentInsert[]) {
   return supabase
     .from("students")
     .insert(students);
@@ -396,8 +406,9 @@ export async function apiFetchClassSecret(classId: string) {
 }
 
 export async function apiUpdateClassSecret(classId: string, adminCode: string) {
+  const payload: ClassSecretUpdate = { admin_code: adminCode };
   return supabase
     .from("class_secrets")
-    .update({ admin_code: adminCode })
+    .update(payload)
     .eq("class_id", classId);
 }

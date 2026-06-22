@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import { supabase } from "../supabaseClient";
+import type { ClassInsert, ClassSecretInsert } from "../lib/database.types";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -182,9 +183,10 @@ export function Lobby() {
 
       // 코드 변경/생성 (upsert: 기존 row 없으면 생성)
       if (wantsCodeChange) {
+        const secret: ClassSecretInsert = { class_id: editingLeague.id, admin_code: editAdminCode };
         const { error: codeErr } = await supabase
           .from("class_secrets")
-          .upsert({ class_id: editingLeague.id, admin_code: editAdminCode }, { onConflict: "class_id" });
+          .upsert(secret, { onConflict: "class_id" });
         if (codeErr) throw codeErr;
       }
 
@@ -247,21 +249,22 @@ export function Lobby() {
     setCreating(true);
     try {
       // 1. classes 테이블에 인서트 (settings에서 adminCode 제외)
+      const newClass: ClassInsert = {
+        class_name: newLeagueName.trim(),
+        settings: {
+          season: finalSeason,
+          schoolName: newSchoolName.trim(),
+          sport: newSport.trim(),
+          // 개설 시 선택한 '리그 성향' → 기준점/승패/보너스/패널티 일괄 적용
+          ...buildBundleSettings(selectedBundle),
+        },
+        owner_uid: userId,
+        scorekeeper_uids: [],
+        co_admin_uids: []
+      };
       const { data: classData, error: classErr } = await supabase
         .from("classes")
-        .insert({
-          class_name: newLeagueName.trim(),
-          settings: {
-            season: finalSeason,
-            schoolName: newSchoolName.trim(),
-            sport: newSport.trim(),
-            // 개설 시 선택한 '리그 성향' → 기준점/승패/보너스/패널티 일괄 적용
-            ...buildBundleSettings(selectedBundle),
-          },
-          owner_uid: userId,
-          scorekeeper_uids: [],
-          co_admin_uids: []
-        })
+        .insert(newClass)
         .select("id")
         .single();
 
@@ -269,12 +272,13 @@ export function Lobby() {
 
       // 2. class_secrets 테이블에 admin_code 삽입
       if (classData) {
+        const secret: ClassSecretInsert = {
+          class_id: (classData as { id: string }).id,
+          admin_code: adminCode
+        };
         const { error: secretErr } = await supabase
           .from("class_secrets")
-          .insert({
-            class_id: classData.id,
-            admin_code: adminCode
-          });
+          .insert(secret);
         if (secretErr) throw secretErr;
       }
 
