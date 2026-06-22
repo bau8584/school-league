@@ -1,7 +1,7 @@
 import { supabase } from "../supabaseClient";
 import type {
   StudentInsert,
-  MatchInsert, MatchUpdate,
+  MatchInsert,
   ClassUpdate, ClassSecretUpdate,
 } from "./database.types";
 
@@ -108,29 +108,6 @@ export async function apiInsertMatchesBulk(matches: MatchInsert[]) {
   return supabase
     .from("matches")
     .insert(matches);
-}
-
-export async function apiUpdateMatchWinnerLoser(
-  matchId: string,
-  winnerId: string,
-  loserId: string,
-  winner2Id?: string | null,
-  loser2Id?: string | null,
-  winnerScore?: number | null,
-  loserScore?: number | null
-) {
-  const payload: MatchUpdate = {
-    winner_id: winnerId,
-    loser_id: loserId,
-    winner2_id: winner2Id ?? null,
-    loser2_id: loser2Id ?? null,
-    winner_score: winnerScore ?? null,
-    loser_score: loserScore ?? null
-  };
-  return supabase
-    .from("matches")
-    .update(payload)
-    .eq("id", matchId);
 }
 
 // --- Students API ---
