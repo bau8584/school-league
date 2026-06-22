@@ -111,6 +111,7 @@ function useLeagueStoreInternal() {
     isSyncingRef.current = isSyncing;
   }, [isSyncing]);
 
+  const [matchesLoaded, setMatchesLoaded] = useState<boolean>(false); // 경기 lazy-load 완료 여부(로딩 UI용)
   const [seasonList, setSeasonList] = useState<string[]>([]); // 과거 시즌 라벨만 (현재 시즌은 별도)
   const [currentSeason, setCurrentSeason] = useState<string>("시즌 1"); // 현재 활성 시즌의 실제 라벨
   const [currentViewSeason, setCurrentViewSeason] = useState<string>("현재 시즌");
@@ -324,6 +325,7 @@ function useLeagueStoreInternal() {
         const sortedMatches = [...matchesList].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         setMatches(sortedMatches);
         matchesLoadedRef.current = true;
+        setMatchesLoaded(true);
       }
 
       setCurrentClassId(classId);
@@ -402,6 +404,7 @@ function useLeagueStoreInternal() {
       list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setMatches(list);
       matchesLoadedRef.current = true;
+      setMatchesLoaded(true);
     } catch (e) {
       console.warn("loadMatches failed:", e);
     }
@@ -2193,6 +2196,7 @@ function useLeagueStoreInternal() {
     teacherAccessCode,
     setTeacherAccessCode,
     loadMatches,
+    matchesLoaded,
     lockLeaderboard,
     lockAdmin,
     saveLockSetting,

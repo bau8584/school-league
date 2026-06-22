@@ -86,7 +86,7 @@ function RecentDots({ recent, size = "sm" }: { recent: ("W" | "L")[]; size?: "sm
 
 function StudentViewerComponent() {
   const { classId } = Route.useParams();
-  const { students, matches, title, loadClassData, loadMatches, tierThresholds, hydrated, isSyncing,
+  const { students, matches, matchesLoaded, title, loadClassData, loadMatches, tierThresholds, hydrated, isSyncing,
     seasonList, currentSeason, currentViewSeason, changeViewSeason,
     decaySettings, decayAppliedDates } = useLeagueStore();
 
@@ -221,6 +221,7 @@ function StudentViewerComponent() {
             student={selectedStudent}
             students={students}
             matches={matches}
+            matchesLoading={currentViewSeason === "현재 시즌" && !matchesLoaded}
             thresholds={thresholds}
             decaySettings={decaySettings}
             decayAppliedDates={decayAppliedDates}
@@ -361,6 +362,7 @@ function StudentDashboard({
   student,
   students,
   matches,
+  matchesLoading = false,
   thresholds,
   decaySettings,
   decayAppliedDates = {},
@@ -371,6 +373,7 @@ function StudentDashboard({
   student: Student;
   students: Student[];
   matches: Match[];
+  matchesLoading?: boolean;
   thresholds: Record<TierName, number>;
   decaySettings?: DecaySettingsRecord;
   decayAppliedDates?: Record<string, string>;
@@ -565,9 +568,14 @@ function StudentDashboard({
             <Trophy className="size-4.5 text-neon-blue" />
             나의 최근 경기
           </h3>
-          <span className="text-xs text-muted-foreground font-semibold">총 {myMatches.length}경기</span>
+          <span className="text-xs text-muted-foreground font-semibold">{matchesLoading ? "불러오는 중…" : `총 ${myMatches.length}경기`}</span>
         </div>
-        {myMatches.length === 0 ? (
+        {matchesLoading && myMatches.length === 0 ? (
+          <div className="text-center py-14 px-4">
+            <div className="size-8 mx-auto mb-3 rounded-full border-4 border-muted/30 border-t-neon-blue animate-spin" />
+            <p className="text-sm font-semibold text-muted-foreground">경기 기록을 불러오는 중…</p>
+          </div>
+        ) : myMatches.length === 0 ? (
           <div className="text-center py-14 px-4">
             <Calendar className="size-10 text-muted-foreground/60 mx-auto mb-3" />
             <p className="text-sm font-semibold text-muted-foreground">아직 경기 기록이 없습니다.</p>
