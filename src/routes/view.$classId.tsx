@@ -364,7 +364,7 @@ function StudentPicker({
                           {displayIdentity(s)}
                         </span>
                         {s.nickname && s.nickname.trim() ? (
-                          <span className="text-xs font-semibold text-muted-foreground">{studentNo(s)}</span>
+                          <span className="text-xs font-semibold text-muted-foreground">{s.number}번</span>
                         ) : null}
                       </div>
                     </button>
