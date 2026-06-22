@@ -934,7 +934,7 @@ export function Lobby() {
                 리그 참여하기
               </h3>
               <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
-                개설자에게 받은 <b className="text-foreground">리그 코드</b>(또는 초대 링크)를 붙여넣으면 그 리그의 관리 교사로 등록됩니다.
+                개설자에게 받은 <b className="text-foreground">리그 코드</b>(또는 초대 링크)를 붙여넣으면 그 리그의 기록원(공동 관리)으로 등록됩니다.
               </p>
             </div>
 
