@@ -38,11 +38,18 @@
   --color-tier-diamond: var(--tier-diamond);
   --color-win: var(--win);
   --color-loss: var(--loss);
+  /* 표면/글자 토큰 — 커스텀 화면(경기기록/매치추천 등)의 다크 하드코딩을 테마화하기 위함 */
+  --color-surface-deep: var(--surface-deep);
+  --color-surface-panel: var(--surface-panel);
+  --color-surface-line: var(--surface-line);
+  --color-strong: var(--strong);
+  --color-soft: var(--soft);
 }
 
-:root {
+/* ── 테마: 게임(기본, 다크 — 블루 사이버펑크. 학교 기존 색감 유지) ── */
+:root,
+[data-theme="game"] {
   --radius: 0.625rem;
-  /* Dark gaming theme by default */
   --background: oklch(0.18 0.03 250);
   --foreground: oklch(0.96 0.01 250);
   --card: oklch(0.22 0.035 250);
@@ -76,9 +83,174 @@
   --win: oklch(0.78 0.18 150);
   --loss: oklch(0.65 0.2 25);
 
+  --surface-deep: oklch(0.14 0.03 250);
+  --surface-panel: oklch(0.2 0.035 250);
+  --surface-line: oklch(0.32 0.035 250);
+  --strong: oklch(0.96 0.01 250);
+  --soft: oklch(0.7 0.02 250);
+
   --gradient-hero: linear-gradient(135deg, oklch(0.78 0.18 230) 0%, oklch(0.78 0.2 280) 100%);
   --shadow-glow-blue: 0 0 24px oklch(0.78 0.18 230 / 0.35);
   --shadow-glow-gold: 0 0 24px oklch(0.83 0.16 85 / 0.4);
+  --text-glow-blue: 0 0 12px oklch(0.78 0.18 230 / 0.6);
+  --body-gradient:
+    radial-gradient(ellipse at top, oklch(0.25 0.06 260 / 0.5), transparent 60%),
+    radial-gradient(ellipse at bottom, oklch(0.22 0.05 200 / 0.4), transparent 60%);
+}
+
+/* ── 테마: 모던 글래스(웜 뉴트럴 + 먹 강조 + 프로스티드 투명) ── */
+[data-theme="modern"] {
+  --radius: 1rem;
+  --background: oklch(0.972 0.008 80);
+  --foreground: oklch(0.22 0.006 60);
+  --card: oklch(0.995 0.004 80);
+  --card-foreground: oklch(0.22 0.006 60);
+  --popover: oklch(0.995 0.004 80);
+  --popover-foreground: oklch(0.22 0.006 60);
+  --primary: oklch(0.28 0.01 60);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.94 0.008 75);
+  --secondary-foreground: oklch(0.28 0.01 60);
+  --muted: oklch(0.95 0.006 75);
+  --muted-foreground: oklch(0.48 0.01 65);
+  --accent: oklch(0.93 0.01 75);
+  --accent-foreground: oklch(0.28 0.01 60);
+  --destructive: oklch(0.55 0.18 28);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0.9 0.008 75);
+  --input: oklch(0.93 0.008 75);
+  --ring: oklch(0.28 0.01 60);
+
+  --neon-blue: oklch(0.28 0.01 60);
+  --neon-green: oklch(0.55 0.12 150);
+  --gold: oklch(0.66 0.13 85);
+
+  --tier-bronze: oklch(0.52 0.13 50);
+  --tier-silver: oklch(0.55 0.015 70);
+  --tier-gold: oklch(0.64 0.14 85);
+  --tier-platinum: oklch(0.58 0.1 190);
+  --tier-diamond: oklch(0.45 0.06 265);
+
+  --win: oklch(0.55 0.12 150);
+  --loss: oklch(0.55 0.18 28);
+
+  --surface-deep: oklch(0.96 0.006 78);
+  --surface-panel: oklch(0.995 0.004 80);
+  --surface-line: oklch(0.9 0.008 75);
+  --strong: oklch(0.22 0.006 60);
+  --soft: oklch(0.48 0.01 65);
+
+  --gradient-hero: linear-gradient(135deg, oklch(0.28 0.01 60) 0%, oklch(0.45 0.06 265) 100%);
+  --shadow-glow-blue: 0 0 0 transparent;
+  --shadow-glow-gold: 0 0 0 transparent;
+  --text-glow-blue: none;
+  /* 프로스티드 카드가 비치도록 은은한 웜 다색 배경(저채도, 우아) */
+  --body-gradient:
+    radial-gradient(ellipse at 15% 0%, oklch(0.93 0.045 60 / 0.7), transparent 55%),
+    radial-gradient(ellipse at 85% 15%, oklch(0.92 0.03 250 / 0.5), transparent 55%),
+    radial-gradient(ellipse at 60% 100%, oklch(0.94 0.04 135 / 0.45), transparent 55%);
+}
+
+/* ── 테마: 클레이모피즘(캔디 — 피치+민트+버터) ───────────────── */
+[data-theme="clay"] {
+  --radius: 1.75rem;
+  --background: oklch(0.962 0.03 70);
+  --foreground: oklch(0.42 0.05 40);
+  --card: oklch(0.99 0.02 70);
+  --card-foreground: oklch(0.42 0.05 40);
+  --popover: oklch(0.99 0.02 70);
+  --popover-foreground: oklch(0.42 0.05 40);
+  --primary: oklch(0.78 0.13 35);
+  --primary-foreground: oklch(0.33 0.06 35);
+  --secondary: oklch(0.85 0.1 165);
+  --secondary-foreground: oklch(0.35 0.06 165);
+  --muted: oklch(0.95 0.025 65);
+  --muted-foreground: oklch(0.55 0.05 45);
+  --accent: oklch(0.92 0.08 90);
+  --accent-foreground: oklch(0.42 0.07 60);
+  --destructive: oklch(0.66 0.16 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0.9 0.04 60);
+  --input: oklch(0.95 0.03 65);
+  --ring: oklch(0.78 0.13 35);
+
+  --neon-blue: oklch(0.78 0.13 35);
+  --neon-green: oklch(0.75 0.12 165);
+  --gold: oklch(0.82 0.12 90);
+
+  --tier-bronze: oklch(0.68 0.11 50);
+  --tier-silver: oklch(0.72 0.03 70);
+  --tier-gold: oklch(0.8 0.12 90);
+  --tier-platinum: oklch(0.76 0.09 195);
+  --tier-diamond: oklch(0.7 0.13 320);
+
+  --win: oklch(0.75 0.12 165);
+  --loss: oklch(0.66 0.16 25);
+
+  --surface-deep: oklch(0.95 0.03 65);
+  --surface-panel: oklch(0.99 0.02 70);
+  --surface-line: oklch(0.91 0.035 60);
+  --strong: oklch(0.42 0.05 40);
+  --soft: oklch(0.55 0.05 45);
+
+  --gradient-hero: linear-gradient(135deg, oklch(0.78 0.13 35) 0%, oklch(0.82 0.1 150) 100%);
+  --shadow-glow-blue: 0 0 18px oklch(0.78 0.13 35 / 0.2);
+  --shadow-glow-gold: 0 0 18px oklch(0.82 0.12 90 / 0.25);
+  --text-glow-blue: none;
+  --body-gradient:
+    radial-gradient(ellipse at 15% 0%, oklch(0.9 0.07 40 / 0.6), transparent 58%),
+    radial-gradient(ellipse at 85% 100%, oklch(0.9 0.07 165 / 0.5), transparent 58%);
+}
+
+/* ── 테마: 블랙 모던(OLED, 고급 무채색) ─────────────────────── */
+[data-theme="black"] {
+  --radius: 0.5rem;
+  --background: oklch(0.04 0 0);
+  --foreground: oklch(0.95 0 0);
+  --card: oklch(0.12 0 0);
+  --card-foreground: oklch(0.95 0 0);
+  --popover: oklch(0.12 0 0);
+  --popover-foreground: oklch(0.95 0 0);
+  --primary: oklch(0.72 0.09 235);
+  --primary-foreground: oklch(0.08 0 0);
+  --secondary: oklch(0.16 0 0);
+  --secondary-foreground: oklch(0.92 0 0);
+  --muted: oklch(0.14 0 0);
+  --muted-foreground: oklch(0.6 0 0);
+  --accent: oklch(0.18 0 0);
+  --accent-foreground: oklch(0.95 0 0);
+  --destructive: oklch(0.6 0.2 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.2 0 0);
+  --input: oklch(0.16 0 0);
+  --ring: oklch(0.82 0.03 240);
+
+  --neon-blue: oklch(0.82 0.03 240);
+  --neon-green: oklch(0.72 0.1 155);
+  --gold: oklch(0.8 0.1 85);
+
+  --tier-bronze: oklch(0.6 0.1 50);
+  --tier-silver: oklch(0.78 0.015 250);
+  --tier-gold: oklch(0.8 0.12 85);
+  --tier-platinum: oklch(0.78 0.09 190);
+  --tier-diamond: oklch(0.74 0.12 280);
+
+  --win: oklch(0.72 0.12 155);
+  --loss: oklch(0.62 0.18 25);
+
+  --surface-deep: oklch(0.07 0 0);
+  --surface-panel: oklch(0.13 0 0);
+  --surface-line: oklch(0.22 0 0);
+  --strong: oklch(0.95 0 0);
+  --soft: oklch(0.6 0 0);
+
+  --gradient-hero: linear-gradient(135deg, oklch(0.82 0.03 240) 0%, oklch(0.55 0.02 250) 100%);
+  --shadow-glow-blue: 0 0 18px oklch(0.82 0.03 240 / 0.18);
+  --shadow-glow-gold: 0 0 18px oklch(0.8 0.1 85 / 0.22);
+  --text-glow-blue: none;
+  --body-gradient:
+    radial-gradient(ellipse at top, oklch(0.14 0 0 / 0.8), transparent 65%),
+    radial-gradient(ellipse at bottom, oklch(0.1 0 0 / 0.6), transparent 65%);
 }
 
 @layer base {
@@ -95,9 +267,7 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
-    background-image:
-      radial-gradient(ellipse at top, oklch(0.25 0.06 260 / 0.5), transparent 60%),
-      radial-gradient(ellipse at bottom, oklch(0.22 0.05 200 / 0.4), transparent 60%);
+    background-image: var(--body-gradient);
     background-attachment: fixed;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
   }
@@ -107,8 +277,47 @@
   }
 }
 
+/* 테마별 글로우(게임=블루, 모던/블랙=없음/약, 클레이=연핑크). 인라인 blue glow 대체용. */
+@utility glow-primary {
+  box-shadow: var(--shadow-glow-blue);
+}
+
+/* 라이트 테마에서는 팀 강조색(amber/violet) 대신 고대비 글자색으로 — 가독성 확보.
+   게임/블랙(다크)에서는 팀 색 그대로 유지. */
+[data-theme="modern"] .team-name,
+[data-theme="clay"] .team-name {
+  color: var(--strong);
+}
+
+/* 클레이모피즘: 카드를 통통한 3D 점토로 (이중 그림자 + 인셋 하이라이트) */
+[data-theme="clay"] .theme-card {
+  border-radius: 1.75rem;
+  border: none;
+  background-color: oklch(0.99 0.02 70);
+  box-shadow:
+    8px 8px 20px oklch(0.7 0.08 50 / 0.3),
+    -6px -6px 16px oklch(1 0 0 / 0.9),
+    inset 2px 2px 5px oklch(1 0 0 / 0.7),
+    inset -3px -3px 7px oklch(0.72 0.07 50 / 0.18);
+}
+/* 클레이: 버튼을 말랑 알약으로 */
+[data-theme="clay"] .theme-btn {
+  border-radius: 9999px;
+  box-shadow: 4px 4px 10px oklch(0.7 0.08 50 / 0.28), -3px -3px 8px oklch(1 0 0 / 0.85);
+}
+
+/* 모던 글래스: 웜 뉴트럴 배경 위 프로스티드 투명 카드 (가독 위해 알파 0.6, 인라인 bg-card/60 덮어씀) */
+[data-theme="modern"] .theme-card {
+  background-color: oklch(1 0 0 / 0.6) !important;
+  background-image: linear-gradient(135deg, oklch(1 0 0 / 0.45), oklch(1 0 0 / 0) 48%);
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  border: 1px solid oklch(1 0 0 / 0.7);
+  box-shadow: 0 8px 30px oklch(0.45 0.02 70 / 0.12), inset 0 1px 0 oklch(1 0 0 / 0.8);
+}
+
 @utility text-glow-blue {
-  text-shadow: 0 0 12px oklch(0.78 0.18 230 / 0.6);
+  text-shadow: var(--text-glow-blue);
 }
 
 @utility text-glow-gold {

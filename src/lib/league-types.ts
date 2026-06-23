@@ -28,6 +28,7 @@ export type Student = {
   totalMatches?: number; // 총 경기수
   currentStreak?: number; // 현재 연승/연패 기록 (연승은 양수, 연패는 음수)
   achievements?: any[]; // 획득한 업적 목록
+  title?: string | null; // 대표 칭호(해금 업적 중 선택)
 };
 
 /**

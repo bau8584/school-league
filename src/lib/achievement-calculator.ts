@@ -106,11 +106,20 @@ export function calculateAchievements(
     return isPlayerA ? (m.revengeBonusA ?? 0) > 0 : (m.revengeBonusB ?? 0) > 0;
   }).length;
 
-  // 라이벌 격퇴 보너스 누적 횟수
-  const rivalCount = studentMatches.filter((m) => {
-    const isPlayerA = m.playerAId === studentId;
-    return isPlayerA ? (m.rivalBonusA ?? 0) > 0 : (m.rivalBonusB ?? 0) > 0;
-  }).length;
+  // 라이벌전 다승: 한 상대(라이벌)에게 거둔 최다 누적 승수
+  const winsByOpponent: Record<string, number> = {};
+  for (const m of studentMatches) {
+    const isPlayerA = m.playerAId === studentId || m.playerA2Id === studentId;
+    const aWon = m.scoreA > m.scoreB;
+    const won = isPlayerA ? aWon : !aWon;
+    if (!won) continue;
+    const oppIds = isPlayerA ? [m.playerBId, m.playerB2Id] : [m.playerAId, m.playerA2Id];
+    for (const oid of oppIds) {
+      if (!oid) continue;
+      winsByOpponent[oid] = (winsByOpponent[oid] || 0) + 1;
+    }
+  }
+  const rivalCount = Object.values(winsByOpponent).reduce((mx, v) => Math.max(mx, v), 0);
 
   return [
     // Common (커먼)
@@ -218,11 +227,11 @@ export function calculateAchievements(
     {
       id: "rival_destroyer",
       name: "라이벌 파괴자",
-      description: "라이벌 격파 15회 누적 획득",
+      description: "한 라이벌에게 10승 (같은 상대 최다 누적 승)",
       tier: "Epic",
       currentValue: rivalCount,
-      targetValue: 15,
-      isUnlocked: rivalCount >= 15
+      targetValue: 10,
+      isUnlocked: rivalCount >= 10
     },
     // Legendary (레전더리)
     {

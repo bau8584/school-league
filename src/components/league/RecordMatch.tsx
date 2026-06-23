@@ -101,6 +101,8 @@ export function RecordMatch({
   const [b2, setB2] = useState<Selection>(empty);
   const [scoreA, setScoreA] = useState(0);
   const [scoreB, setScoreB] = useState(0);
+  // 한 번에 한 개의 선수 선택 패널만 펼친다
+  const [activeSlot, setActiveSlot] = useState<"A" | "A2" | "B" | "B2" | null>(null);
 
   // Modal states
   const [showModal, setShowModal] = useState(false);
@@ -800,7 +802,7 @@ export function RecordMatch({
           "relative overflow-hidden rounded-xl border p-5 flex flex-col justify-between h-full transition-all",
           isPromoted 
             ? `bg-[#090d16]/95 border-2 animate-glow-${p.finalTier.toLowerCase()}` 
-            : "border-cyan-500/20 bg-[#090d16]/95 shadow-[0_0_30px_rgba(0,180,216,0.1)] animate-glow-pulse"
+            : "border-cyan-500/20 bg-[#090d16]/95 glow-primary animate-glow-pulse"
         )}
       >
         {/* Futuristic Grid Overlay inside card */}
@@ -854,7 +856,7 @@ export function RecordMatch({
                   className={cn(
                     "flex items-center justify-between p-2.5 rounded-lg border bg-[#0d1222]/80 border-[#1c273e] transition-all duration-200",
                     isVisible 
-                      ? cn("opacity-100 scale-100 animate-stamp-pop border-[#1c273e]", isPromoted ? "shadow-md" : "shadow-[0_0_10px_rgba(0,180,216,0.05)]") 
+                      ? cn("opacity-100 scale-100 animate-stamp-pop border-[#1c273e]", isPromoted ? "shadow-md" : "glow-primary") 
                       : "opacity-0 scale-150 pointer-events-none"
                   )}
                 >
@@ -1011,7 +1013,7 @@ export function RecordMatch({
         <div className="inline-flex rounded-xl bg-muted/40 p-1 border border-border/30 backdrop-blur">
           <button
             type="button"
-            onClick={() => setMatchType("single")}
+            onClick={() => { setMatchType("single"); setActiveSlot(null); }}
             className={cn(
               "px-6 py-2.5 rounded-lg text-sm font-black transition-all duration-200 flex items-center gap-2",
               matchType === "single"
@@ -1024,7 +1026,7 @@ export function RecordMatch({
           </button>
           <button
             type="button"
-            onClick={() => setMatchType("double")}
+            onClick={() => { setMatchType("double"); setActiveSlot(null); }}
             className={cn(
               "px-6 py-2.5 rounded-lg text-sm font-black transition-all duration-200 flex items-center gap-2",
               matchType === "double"
@@ -1038,75 +1040,83 @@ export function RecordMatch({
         </div>
       </div>
 
-      <div className={cn(
-        "grid gap-4 items-start",
-        matchType === "double" 
-          ? "md:grid-cols-2 lg:grid-cols-4" 
-          : "md:grid-cols-2"
-      )}>
-        <PlayerSelector 
-          label={matchType === "double" ? "팀 A(선수1)" : "선수 A"} 
-          accent="blue" 
-          students={students} 
-          value={a} 
-          onChange={setA} 
-          player={playerA} 
-          thresholds={thresholds}
-        />
-        {matchType === "double" && (
-          <PlayerSelector 
-            label="팀 A(선수2)" 
-            accent="blue" 
-            students={students} 
-            value={a2} 
-            onChange={setA2} 
-            player={playerA2} 
-            thresholds={thresholds}
-          />
-        )}
-        <PlayerSelector 
-          label={matchType === "double" ? "팀 B(선수1)" : "선수 B"} 
-          accent="green" 
-          students={students} 
-          value={b} 
-          onChange={setB} 
-          player={playerB} 
-          thresholds={thresholds}
-        />
-        {matchType === "double" && (
-          <PlayerSelector 
-            label="팀 B(선수2)" 
-            accent="green" 
-            students={students} 
-            value={b2} 
-            onChange={setB2} 
-            player={playerB2} 
-            thresholds={thresholds}
-          />
-        )}
-      </div>
+      {(() => {
+        const slotMap = {
+          A:  { value: a,  set: setA,  player: playerA,  accent: "amber"  as Accent, label: matchType === "double" ? "선수 1" : "선수 A" },
+          A2: { value: a2, set: setA2, player: playerA2, accent: "amber"  as Accent, label: "선수 2" },
+          B:  { value: b,  set: setB,  player: playerB,  accent: "violet" as Accent, label: matchType === "double" ? "선수 1" : "선수 B" },
+          B2: { value: b2, set: setB2, player: playerB2, accent: "violet" as Accent, label: "선수 2" },
+        } as const;
+        const cols = matchType === "double" ? 2 : 1;
+        const renderSlot = (key: keyof typeof slotMap) => {
+          const s = slotMap[key];
+          return (
+            <Slot
+              key={key}
+              label={s.label}
+              accent={s.accent}
+              player={s.player}
+              thresholds={thresholds}
+              active={activeSlot === key}
+              onOpen={() => setActiveSlot((prev) => (prev === key ? null : key))}
+              onClear={() => { s.set({ grade: s.value.grade, classNum: s.value.classNum, studentId: null }); setActiveSlot(key); }}
+            />
+          );
+        };
+        const active = activeSlot ? slotMap[activeSlot] : null;
+        return (
+          <>
+            <div className="grid gap-4 md:grid-cols-2 items-start">
+              <TeamBlock title={matchType === "double" ? "팀 A" : "선수 A"} accent="amber" cols={cols}>
+                {renderSlot("A")}
+                {matchType === "double" && renderSlot("A2")}
+              </TeamBlock>
+              <TeamBlock title={matchType === "double" ? "팀 B" : "선수 B"} accent="violet" cols={cols}>
+                {renderSlot("B")}
+                {matchType === "double" && renderSlot("B2")}
+              </TeamBlock>
+            </div>
+
+            {active && (
+              <Card className={cn("border bg-card/60 p-4 backdrop-blur", ACCENT[active.accent].soft)}>
+                <div className={cn("mb-3 inline-flex items-center rounded-lg border px-2.5 py-1 text-xs font-black", ACCENT[active.accent].band)}>
+                  {(matchType === "double" ? (active.accent === "amber" ? "팀 A · " : "팀 B · ") : "") + active.label} 선택
+                </div>
+                <PlayerPicker
+                  accent={active.accent}
+                  students={students}
+                  value={active.value}
+                  onChange={active.set}
+                  onClose={() => setActiveSlot(null)}
+                  thresholds={thresholds}
+                />
+              </Card>
+            )}
+          </>
+        );
+      })()}
 
       <Card className="border-border/60 bg-card/60 p-6 backdrop-blur">
         <div className="mb-4 text-center text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">스코어보드</div>
         <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-4">
-          <ScorePad 
-            name={matchType === "double" 
-              ? "팀 A" 
+          <ScorePad
+            name={matchType === "double"
+              ? "팀 A"
               : ((playerA?.realName || playerA?.name) ?? "선수 A")
-            } 
-            value={scoreA} 
-            onChange={setScoreA} 
-            accent="blue" 
+            }
+            value={scoreA}
+            onChange={setScoreA}
+            accent="amber"
           />
           <div className="pt-12 text-center text-3xl font-black text-muted-foreground">VS</div>
-          <ScorePad 
-            name={matchType === "double" 
-              ? "팀 B" 
+          <ScorePad
+            name={matchType === "double"
+              ? "팀 B"
               : ((playerB?.realName || playerB?.name) ?? "선수 B")
-            } 
-            value={scoreB} 
-            onChange={setScoreB} 
-            accent="green" 
+            }
+            value={scoreB}
+            onChange={setScoreB}
+            accent="violet"
           />
         </div>
       </Card>
@@ -1115,7 +1125,7 @@ export function RecordMatch({
         size="lg"
         onClick={submit}
         disabled={isSyncing}
-        className="h-14 w-full bg-gradient-to-r from-neon-blue to-tier-diamond text-base font-bold text-primary-foreground shadow-[0_0_32px_oklch(0.78_0.18_230/0.4)] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="h-14 w-full bg-gradient-to-r from-neon-blue to-tier-diamond text-base font-bold text-primary-foreground glow-primary hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {isSyncing ? (
           <>
@@ -1276,7 +1286,7 @@ export function RecordMatch({
             <div 
               className={cn(
                 "relative w-full max-w-5xl overflow-hidden border bg-[#06080f] rounded-2xl p-4 md:p-6 flex flex-col items-center animate-in zoom-in duration-300",
-                isRankUp ? `animate-glow-${promotedTier.toLowerCase()}` : "border-cyan-500/30 shadow-[0_0_60px_rgba(0,180,216,0.2)] animate-glow-pulse"
+                isRankUp ? `animate-glow-${promotedTier.toLowerCase()}` : "border-cyan-500/30 glow-primary animate-glow-pulse"
               )}
             >
               {/* Embedded custom CSS */}
@@ -1519,7 +1529,7 @@ export function RecordMatch({
 
                 return (
                   <div className="relative z-10 flex flex-col items-center text-center mb-4 shrink-0 animate-scale-up-bounce">
-                    <div className="flex size-10 items-center justify-center rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 shadow-[0_0_20px_rgba(0,180,216,0.3)] mb-2 shrink-0">
+                    <div className="flex size-10 items-center justify-center rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 glow-primary mb-2 shrink-0">
                       <Trophy className="size-5 text-cyan-400 animate-bounce" />
                     </div>
                     <h2 className="text-xl md:text-2xl font-black uppercase tracking-[0.25em] text-white animate-glow-victory mb-0.5">
@@ -1631,7 +1641,7 @@ export function RecordMatch({
                     "h-12 px-12 text-white font-black uppercase tracking-widest active:scale-95 transition-all w-full sm:w-auto rounded-lg border",
                     isRankUp 
                       ? "bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-600 hover:from-emerald-500 hover:to-emerald-400 border-emerald-400/40 shadow-[0_0_25px_rgba(16,185,129,0.35)]"
-                      : "bg-gradient-to-r from-cyan-600 via-cyan-500 to-cyan-600 hover:from-cyan-500 hover:to-cyan-400 border-cyan-400/40 shadow-[0_0_25px_rgba(0,180,216,0.35)]"
+                      : "bg-gradient-to-r from-cyan-600 via-cyan-500 to-cyan-600 hover:from-cyan-500 hover:to-cyan-400 border-cyan-400/40 glow-primary"
                   )}
                 >
                   확인 (다음 경기)
@@ -1649,7 +1659,7 @@ export function RecordMatch({
         if (!targetStudent) return null;
         return (
           <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-300">
-            <div className="relative w-full max-w-md overflow-hidden border border-neon-blue/30 bg-background/95 rounded-2xl p-6 md:p-8 shadow-[0_0_50px_rgba(0,180,216,0.2)] flex flex-col items-center animate-in zoom-in duration-300">
+            <div className="relative w-full max-w-md overflow-hidden border border-neon-blue/30 bg-background/95 rounded-2xl p-6 md:p-8 glow-primary flex flex-col items-center animate-in zoom-in duration-300">
               {/* Grid Background Effect */}
               <div className="absolute inset-0 bg-[linear-gradient(rgba(18,18,18,0.2)_1px,transparent_1px),linear-gradient(90deg,rgba(18,18,18,0.2)_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none opacity-20" />
               
@@ -1664,7 +1674,7 @@ export function RecordMatch({
 
               {/* Title & Info */}
               <div className="relative z-10 flex flex-col items-center text-center w-full">
-                <div className="flex size-14 items-center justify-center rounded-full bg-neon-blue/15 border border-neon-blue/30 text-neon-blue shadow-[0_0_30px_rgba(0,180,216,0.3)] mb-4 animate-pulse">
+                <div className="flex size-14 items-center justify-center rounded-full bg-neon-blue/15 border border-neon-blue/30 text-neon-blue glow-primary mb-4 animate-pulse">
                   <Sparkles className="size-6 text-neon-blue" />
                 </div>
                 <h3 className="text-xl font-black uppercase tracking-wider text-glow-blue text-neon-blue mb-1">
@@ -1681,7 +1691,7 @@ export function RecordMatch({
                 {/* Male Option */}
                 <button
                   onClick={() => handleUpdateGender("M")}
-                  className="flex flex-col items-center justify-center p-5 rounded-xl border border-neon-blue/30 bg-neon-blue/5 hover:bg-neon-blue/15 hover:border-neon-blue/60 transition-all active:scale-95 group shadow-[0_0_15px_rgba(0,180,216,0.05)]"
+                  className="flex flex-col items-center justify-center p-5 rounded-xl border border-neon-blue/30 bg-neon-blue/5 hover:bg-neon-blue/15 hover:border-neon-blue/60 transition-all active:scale-95 group glow-primary"
                 >
                   <span className="text-4xl mb-2 group-hover:animate-bounce">♂</span>
                   <span className="text-sm font-black text-neon-blue tracking-wider">남성 (M)</span>
@@ -1712,23 +1722,86 @@ export function RecordMatch({
   );
 }
 
-function PlayerSelector({
-  label, accent, students, value, onChange, player, thresholds,
+const ACCENT = {
+  amber:  { text: "text-amber-400",  border: "border-amber-500/60",  soft: "border-amber-500/30 bg-amber-500/[0.06]",  fill: "border-amber-500/60 bg-amber-500/10",  band: "border-amber-500/40 bg-amber-500/15 text-amber-400" },
+  violet: { text: "text-violet-400", border: "border-violet-500/60", soft: "border-violet-500/30 bg-violet-500/[0.06]", fill: "border-violet-500/60 bg-violet-500/10", band: "border-violet-500/40 bg-violet-500/15 text-violet-400" },
+} as const;
+type Accent = keyof typeof ACCENT;
+
+// 팀 묶음(soft 박스 + 타이틀 밴드 + 1/2열)
+function TeamBlock({ title, accent, cols, children }: { title: string; accent: Accent; cols: number; children: React.ReactNode }) {
+  const a = ACCENT[accent];
+  return (
+    <div className={cn("rounded-2xl border p-2.5 sm:p-3", a.soft)}>
+      <div className={cn("mb-2 inline-flex items-center rounded-lg border px-2.5 py-1 text-xs font-black", a.band)}>{title}</div>
+      <div className={cn("grid gap-2", cols === 1 ? "grid-cols-1" : "grid-cols-2")}>{children}</div>
+    </div>
+  );
+}
+
+// 컴팩트 슬롯 — 선택됨(카드) / 비었음(점선 추가 버튼)
+function Slot({
+  label, accent, player, thresholds, active, onOpen, onClear,
 }: {
   label: string;
-  accent: "blue" | "green";
+  accent: Accent;
+  player: Student | null;
+  thresholds?: Record<string, number>;
+  active: boolean;
+  onOpen: () => void;
+  onClear: () => void;
+}) {
+  const a = ACCENT[accent];
+  if (player) {
+    return (
+      <div className={cn("relative rounded-xl border p-3 transition-all", a.fill, active && "ring-2 ring-offset-0", active && a.border)}>
+        <button
+          type="button"
+          onClick={onClear}
+          className="absolute top-1.5 right-1.5 flex size-6 items-center justify-center rounded-md bg-rose-600/90 text-white hover:bg-rose-700 active:scale-95 cursor-pointer"
+          aria-label="선택 해제"
+        >
+          <X className="size-3.5" />
+        </button>
+        <button type="button" onClick={onOpen} className="w-full text-left cursor-pointer">
+          <div className={cn("text-[10px] font-black uppercase tracking-wider", a.text)}>{label}</div>
+          <div className="text-[11px] text-muted-foreground">{player.grade}학년 {player.classNum}반 {player.number}번</div>
+          <div className="mt-0.5 flex items-center gap-1.5 min-w-0">
+            <GenderMark gender={player.gender} className="size-4 text-[10px] shrink-0" />
+            <span className="truncate text-base font-black text-foreground">{player.realName || player.name}</span>
+          </div>
+          <div className="mt-1.5">
+            <TierBadge rp={player.rp} thresholds={thresholds} />
+          </div>
+        </button>
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={cn(
+        "flex min-h-[5.5rem] items-center justify-center rounded-xl border border-dashed text-sm font-black transition-all active:scale-95 cursor-pointer",
+        active ? cn(a.border, a.text, "bg-card/40") : "border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted/30",
+      )}
+    >
+      ＋ {label}
+    </button>
+  );
+}
+
+// 선수 선택 패널 — 학교 3단계(학년 → 반 → 로스터) 유지
+function PlayerPicker({
+  accent, students, value, onChange, onClose, thresholds,
+}: {
+  accent: Accent;
   students: Student[];
   value: Selection;
   onChange: (s: Selection) => void;
-  player: Student | null;
+  onClose: () => void;
   thresholds?: Record<string, number>;
 }) {
-  const accentCls = accent === "blue"
-    ? "border-neon-blue/60 bg-neon-blue/15 text-neon-blue shadow-[0_0_14px_oklch(0.78_0.18_230/0.35)]"
-    : "border-neon-green/60 bg-neon-green/15 text-neon-green shadow-[0_0_14px_oklch(0.85_0.22_150/0.35)]";
-
-  const headerCls = accent === "blue" ? "text-neon-blue" : "text-neon-green";
-
   const activeGrades = useMemo(() => {
     const set = new Set<number>();
     students.forEach((s) => {
@@ -1752,110 +1825,76 @@ function PlayerSelector({
   }, [students, value.grade, value.classNum]);
 
   return (
-    <Card className="border-border/60 bg-card/60 p-5 backdrop-blur h-auto">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className={cn("text-sm font-bold uppercase tracking-wider", headerCls)}>{label}</h3>
-        {player && (
-          <button
-            onClick={() => onChange({ grade: value.grade, classNum: value.classNum, studentId: null })}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-black bg-rose-600 hover:bg-rose-700 text-white shadow-[0_0_12px_rgba(225,29,72,0.35)] transition-all active:scale-95 cursor-pointer"
-          >
-            <X className="size-3.5" /> 선수 다시 선택
-          </button>
-        )}
-      </div>
-
-      {player ? (
-        <div className={cn("rounded-lg border p-4", accentCls)}>
-          <div className="text-xs opacity-80">{player.grade}학년 {player.classNum}반 · {player.number}번</div>
-          <div className="mt-1 flex items-center gap-2 text-xl sm:text-2xl font-black min-w-0">
-            <GenderMark gender={player.gender} className="size-5 text-xs shrink-0" />
-            <span className="whitespace-nowrap truncate flex-1">{player.realName || player.name}</span>
-          </div>
-          <div className="mt-2 flex items-center gap-2">
-            <TierBadge rp={player.rp} thresholds={thresholds} />
-          </div>
+    <div className="space-y-4">
+      <div className="space-y-3">
+        {/* 학년 (칩 자체에 'n학년'이 표기되어 별도 제목 불필요) */}
+        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2.5 w-full">
+          {activeGrades.map((g) => (
+            <Chip key={g} active={value.grade === g} accent={accent} onClick={() => onChange({ grade: g, classNum: null, studentId: null })}>
+              {g}학년
+            </Chip>
+          ))}
         </div>
-      ) : (
-        <div className="space-y-4">
-          <Step n={1} title="학년">
-            <div className="grid grid-cols-3 gap-2.5 mt-2 w-full">
-              {activeGrades.map((g) => (
-                <Chip key={g} active={value.grade === g} accent={accent} onClick={() => onChange({ grade: g, classNum: null, studentId: null })}>
-                  {g}학년
+        {value.grade != null && (
+          <>
+            {/* 학년 ↔ 반 구분선 */}
+            <div className="border-t border-border/40" />
+            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2.5 w-full">
+              {classes.map((c) => (
+                <Chip key={c} active={value.classNum === c} accent={accent} onClick={() => onChange({ ...value, classNum: c, studentId: null })}>
+                  {c}반
                 </Chip>
               ))}
+              {classes.length === 0 && <span className="text-xs text-muted-foreground block py-2">학생이 없습니다</span>}
             </div>
-          </Step>
-          {value.grade != null && (
-            <Step n={2} title="반">
-              <div className="grid grid-cols-3 gap-2.5 mt-2 w-full">
-                {classes.map((c) => (
-                  <Chip key={c} active={value.classNum === c} accent={accent} onClick={() => onChange({ ...value, classNum: c, studentId: null })}>
-                    {c}반
-                  </Chip>
-                ))}
-                {classes.length === 0 && <span className="text-xs text-muted-foreground block py-2">학생이 없습니다</span>}
-              </div>
-            </Step>
-          )}
-          {value.classNum != null && (
-            <Step n={3} title="선수 선택">
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {roster.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => onChange({ ...value, studentId: s.id })}
-                    className="relative rounded-lg border border-border/60 bg-[#0e1322]/80 px-2 pt-6 pb-2.5 text-center transition-all hover:border-neon-blue/60 hover:bg-accent/40 flex flex-col items-center justify-between h-auto min-h-[4.75rem] w-full overflow-hidden cursor-pointer"
-                  >
-                    {/* 1. 좌측 상단 번호 */}
-                    <span className="absolute top-1 left-1.5 text-[10px] text-gray-500 font-mono">
-                      {s.number}번
-                    </span>
-
-                    {/* 2. 우측 상단 성별 아이콘 */}
-                    <GenderMark 
-                      gender={s.gender} 
-                      className="absolute top-1 right-1.5 size-3.5 text-[9px] shrink-0" 
-                    />
-                    
-                    {/* 3. 정중앙 이름 배치 */}
-                    <div className="flex-grow flex items-center justify-center w-full min-w-0">
-                      <span className="text-base font-bold text-white break-keep text-center w-full">
-                        {s.realName || s.name}
-                      </span>
-                    </div>
-
-                    {/* 4. 하단 티어 뱃지 단독 배치 */}
-                    <div className="flex justify-center mt-1.5 w-full shrink-0">
-                      <TierBadge rp={s.rp} thresholds={thresholds} />
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </Step>
-          )}
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <div className="mb-2 flex items-center gap-2 text-2xl font-extrabold text-muted-foreground">
-        {title}
+          </>
+        )}
       </div>
-      {children}
+      {value.classNum != null && (
+        <>
+          {/* 반 ↔ 선수 구분선 */}
+          <div className="border-t border-border/40" />
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {roster.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => { onChange({ ...value, studentId: s.id }); onClose(); }}
+                className="relative rounded-lg border border-border/60 bg-surface-deep/80 px-2 pt-6 pb-2.5 text-center transition-all hover:border-neon-blue/60 hover:bg-accent/40 flex flex-col items-center justify-between h-auto min-h-[4.75rem] w-full overflow-hidden cursor-pointer"
+              >
+                {/* 1. 좌측 상단 번호 */}
+                <span className="absolute top-1 left-1.5 text-[10px] text-soft font-mono">
+                  {s.number}번
+                </span>
+
+                {/* 2. 우측 상단 성별 아이콘 */}
+                <GenderMark
+                  gender={s.gender}
+                  className="absolute top-1 right-1.5 size-3.5 text-[9px] shrink-0"
+                />
+
+                {/* 3. 정중앙 이름 배치 */}
+                <div className="flex-grow flex items-center justify-center w-full min-w-0">
+                  <span className="text-base font-bold text-strong break-keep text-center w-full">
+                    {s.realName || s.name}
+                  </span>
+                </div>
+
+                {/* 4. 하단 티어 뱃지 단독 배치 */}
+                <div className="flex justify-center mt-1.5 w-full shrink-0">
+                  <TierBadge rp={s.rp} thresholds={thresholds} />
+                </div>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
-function Chip({ active, accent, onClick, children }: { active: boolean; accent: "blue" | "green"; onClick: () => void; children: React.ReactNode }) {
-  const activeCls = accent === "blue"
-    ? "border-neon-blue bg-neon-blue/20 text-neon-blue shadow-[0_0_18px_rgba(0,180,216,0.35)]"
-    : "border-neon-green bg-neon-green/20 text-neon-green shadow-[0_0_18px_rgba(34,197,94,0.35)]";
+function Chip({ active, accent, onClick, children }: { active: boolean; accent: Accent; onClick: () => void; children: React.ReactNode }) {
+  const a = ACCENT[accent];
+  const activeCls = cn(a.fill, a.text, a.border);
   return (
     <button
       type="button"
@@ -1870,11 +1909,9 @@ function Chip({ active, accent, onClick, children }: { active: boolean; accent: 
   );
 }
 
-function ScorePad({ name, value, onChange, accent }: { name: string; value: number; onChange: (v: number) => void; accent: "blue" | "green" }) {
-  const colorText = accent === "blue" ? "text-neon-blue text-glow-blue" : "text-neon-green";
-  const plusCls = accent === "blue"
-    ? "border-neon-blue/50 bg-neon-blue/10 text-neon-blue hover:bg-neon-blue/20"
-    : "border-neon-green/50 bg-neon-green/10 text-neon-green hover:bg-neon-green/20";
+function ScorePad({ name, value, onChange, accent }: { name: string; value: number; onChange: (v: number) => void; accent: Accent }) {
+  const colorText = ACCENT[accent].text;
+  const plusCls = "border-neon-blue/50 bg-neon-blue/10 text-neon-blue hover:bg-neon-blue/20";
   const minusCls = "border-loss/40 bg-loss/10 text-loss hover:bg-loss/20";
   const set = (delta: number) => onChange(Math.max(0, value + delta));
 
@@ -1897,7 +1934,7 @@ function ScorePad({ name, value, onChange, accent }: { name: string; value: numb
           variant="outline"
           size="sm"
           onClick={() => onChange(0)}
-          className="mt-2.5 h-9 w-full text-xs font-black bg-amber-500 hover:bg-amber-600 text-slate-950 border-none transition-all flex items-center justify-center gap-1.5 active:scale-95 shadow-[0_0_14px_rgba(245,158,11,0.35)] cursor-pointer"
+          className="mt-2.5 h-9 w-full text-xs font-black bg-muted text-muted-foreground hover:bg-accent hover:text-foreground border border-border/60 transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer"
         >
           <RotateCcw className="size-3.5" /> 0으로 초기화
         </Button>

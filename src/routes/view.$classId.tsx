@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLeagueStore } from "@/lib/league-store";
 import { Card } from "@/components/ui/card";
 import { TierBadge } from "@/components/league/TierBadge";
@@ -8,6 +8,7 @@ import { MyAchievements } from "@/components/league/MyAchievements";
 import { SeasonSummary } from "@/components/league/SeasonSummary";
 import { StudentCardSettings } from "@/components/league/StudentCardSettings";
 import { MatchRecommend } from "@/components/league/MatchRecommend";
+import { MyStatsSummary, MyStatsDetail } from "@/components/league/MyStats";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -18,7 +19,7 @@ import {
   type Match,
   type DecaySettingsRecord,
 } from "@/lib/league-types";
-import { Trophy, ChevronLeft, TrendingUp, Medal, Calendar, Settings, Hourglass, Target, BarChart3 } from "lucide-react";
+import { Trophy, ChevronLeft, TrendingUp, Medal, Calendar, Settings, Hourglass, Target, BarChart3, Award } from "lucide-react";
 
 export const Route = createFileRoute("/view/$classId")({
   component: StudentViewerComponent,
@@ -94,8 +95,20 @@ function StudentViewerComponent() {
   const [showSummary, setShowSummary] = useState(false);
   const isPastSeason = currentViewSeason !== "현재 시즌";
 
+  // 내 카드 기억: 이 리그 링크에서 마지막으로 고른 카드를 저장 → 다음 방문 시 바로 내 기록으로 진입
+  const savedKey = `slv_selected_${classId}`;
+  // 카드 선택(저장)
+  const handleSelectStudent = (id: string) => {
+    setSelectedId(id);
+    try { localStorage.setItem(savedKey, id); } catch { /* ignore */ }
+  };
+  // 목록으로(다른 카드 고르기 → 기억 해제)
+  const handleBackToList = () => {
+    setSelectedId(null);
+    try { localStorage.removeItem(savedKey); } catch { /* ignore */ }
+  };
+
   // 시즌 전환: 선택된 학생/보기 상태는 그대로 유지한 채 데이터만 교체.
-  // (학생 id는 시즌 간 동일하므로 같은 학생의 해당 시즌 기록이 바로 보인다)
   const handleSeasonChange = (season: string) => {
     changeViewSeason(season);
   };
@@ -105,6 +118,20 @@ function StudentViewerComponent() {
       loadClassData(classId);
     }
   }, [classId, loadClassData]);
+
+  // 저장된 카드가 있으면(현재 시즌·미선택 시) 자동으로 그 학생 기록으로 진입
+  const autoSelectRef = useRef(false);
+  useEffect(() => {
+    if (autoSelectRef.current) return;
+    if (isPastSeason || selectedId || students.length === 0) return;
+    try {
+      const saved = localStorage.getItem(savedKey);
+      if (saved && students.some((s) => s.id === saved)) {
+        autoSelectRef.current = true;
+        setSelectedId(saved);
+      }
+    } catch { /* ignore */ }
+  }, [students, isPastSeason, selectedId, savedKey]);
 
   // 학생 카드를 열 때만 경기를 lazy-load (목록 화면은 경기 미로드)
   useEffect(() => {
@@ -145,7 +172,7 @@ function StudentViewerComponent() {
       <header className="border-b border-border/60 bg-card/40 backdrop-blur-xl relative z-10">
         <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-lg bg-gradient-to-br from-neon-blue to-tier-diamond shadow-[0_0_18px_oklch(0.78_0.18_230/0.5)]">
+            <div className="flex size-10 items-center justify-center rounded-lg bg-gradient-to-br from-neon-blue to-tier-diamond glow-primary">
               <Trophy className="size-5 text-primary-foreground" />
             </div>
             <div>
@@ -210,7 +237,7 @@ function StudentViewerComponent() {
             decaySettings={decaySettings}
             decayAppliedDates={decayAppliedDates}
             readOnly={isPastSeason}
-            onBack={() => setSelectedId(null)}
+            onBack={handleBackToList}
             onSaved={() => loadClassData(classId, true)}
           />
         ) : isPastSeason && showSummary ? (
@@ -232,7 +259,7 @@ function StudentViewerComponent() {
             <StudentPicker
               students={students}
               thresholds={thresholds}
-              onSelect={setSelectedId}
+              onSelect={handleSelectStudent}
             />
           </>
         )}
@@ -286,7 +313,7 @@ function StudentPicker({
       className={cn(
         "rounded-xl border px-3 py-2.5 text-sm font-bold transition-all active:scale-95 cursor-pointer",
         active
-          ? "border-neon-blue/60 bg-neon-blue/15 text-neon-blue shadow-[0_0_14px_oklch(0.78_0.18_230/0.35)]"
+          ? "border-neon-blue/60 bg-neon-blue/15 text-neon-blue glow-primary"
           : "border-border/60 bg-card/60 text-muted-foreground hover:text-foreground hover:bg-accent/40",
       )}
     >
@@ -333,7 +360,7 @@ function StudentPicker({
           {classNum != null && (
             <div>
               <div className="mb-2 text-sm font-extrabold text-muted-foreground">나의 카드</div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
                 {roster.map((s) => {
                   const tier = getTier(s.rp, thresholds);
                   const style = TIER_STYLES[tier];
@@ -361,7 +388,7 @@ function StudentPicker({
                       </div>
                       <div className="flex flex-col items-center gap-1 py-2 relative z-10">
                         <span className="text-2xl font-black tracking-tight text-foreground text-center break-keep line-clamp-2">
-                          {displayIdentity(s)}
+                          {s.nickname && s.nickname.trim() ? s.nickname.trim() : `${s.number}번`}
                         </span>
                         {s.nickname && s.nickname.trim() ? (
                           <span className="text-xs font-semibold text-muted-foreground">{s.number}번</span>
@@ -409,7 +436,7 @@ function StudentDashboard({
   const currentTier = getTier(student.rp, thresholds);
 
   // 개인 대시보드 탭: 내 기록 / 매치 추천
-  const [tab, setTab] = useState<"record" | "recommend">("record");
+  const [tab, setTab] = useState<"record" | "recommend" | "achievements">("record");
   // 매치 추천(학생 시점): 본인을 고정 분석 대상으로, 상대 범위만 선택
   const recSel = useMemo(
     () => ({ grade: student.grade, classNum: student.classNum, studentId: student.id }),
@@ -506,10 +533,13 @@ function StudentDashboard({
           student={student}
           onClose={() => setSettingsOpen(false)}
           onSaved={onSaved}
+          students={students}
+          matches={matches}
+          thresholds={thresholds}
         />
       )}
 
-      {/* 탭: 내 기록 / 매치 추천 */}
+      {/* 탭: 내 기록 / 매치 추천 / 업적 */}
       <div className="flex gap-1 overflow-x-auto">
         <ViewToggle active={tab === "record"} onClick={() => setTab("record")}>
           <span className="inline-flex items-center gap-1.5"><BarChart3 className="size-4" /> 내 기록</span>
@@ -519,6 +549,9 @@ function StudentDashboard({
             <span className="inline-flex items-center gap-1.5"><Target className="size-4" /> 매치 추천</span>
           </ViewToggle>
         )}
+        <ViewToggle active={tab === "achievements"} onClick={() => setTab("achievements")}>
+          <span className="inline-flex items-center gap-1.5"><Award className="size-4" /> 업적</span>
+        </ViewToggle>
       </div>
 
       {tab === "recommend" && !readOnly && (
@@ -541,8 +574,12 @@ function StudentDashboard({
       )}
 
       {tab === "record" && (<>
-      {/* 프로필 + 티어 진행도 */}
-      <Card className="relative overflow-hidden border-border/60 bg-card/45 p-6 backdrop-blur-xl shadow-lg">
+      <div className="grid grid-cols-2 gap-3 items-stretch">
+      {/* 프로필 + 티어 진행도 (3연승+면 불꽃 글로우) */}
+      <Card className={cn(
+        "h-full relative overflow-hidden border-border/60 bg-card/45 p-6 backdrop-blur-xl shadow-lg",
+        (student.currentStreak ?? 0) >= 3 && "ring-2 ring-orange-500/50 shadow-[0_0_26px_rgba(249,115,22,0.28)]",
+      )}>
         <div
           className={cn(
             "absolute -right-24 -top-24 size-64 rounded-full blur-[100px] pointer-events-none opacity-20",
@@ -550,16 +587,35 @@ function StudentDashboard({
           )}
         />
         <div className="relative z-10 flex flex-col gap-5">
-          <div className="flex items-center justify-between gap-3">
-            <div className="space-y-1">
-              <span className="text-[10px] font-black uppercase tracking-wider text-neon-blue">
-                {student.grade}학년 {student.classNum}반 · {student.number}번
+          <div className="flex flex-col items-start gap-1.5 min-w-0">
+            {/* 이름 */}
+            <h2 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2 max-w-full break-keep">
+              <GenderMark gender={student.gender} />
+              {student.nickname && student.nickname.trim() ? (
+                <span className="truncate">{student.nickname.trim()}</span>
+              ) : readOnly ? (
+                <span>{student.number}번</span>
+              ) : (
+                <button
+                  onClick={() => setSettingsOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-neon-blue/50 bg-neon-blue/10 px-3 py-1.5 text-base font-bold text-neon-blue transition-all hover:bg-neon-blue/20 active:scale-95 cursor-pointer"
+                >
+                  <Settings className="size-4" />
+                  별명 정하기
+                </button>
+              )}
+            </h2>
+            {/* 칭호 (이름과 반번호 사이) */}
+            {student.title && student.title.trim() ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-bold text-amber-400">
+                🏅 {student.title.trim()}
               </span>
-              <h2 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
-                <GenderMark gender={student.gender} />
-                <span>{displayIdentity(student)}</span>
-              </h2>
-            </div>
+            ) : null}
+            {/* 반번호 */}
+            <span className="text-[11px] font-bold text-muted-foreground">
+              {student.grade}학년 {student.classNum}반 {student.number}번
+            </span>
+            {/* 티어 (이름 아래) */}
             <TierBadge rp={student.rp} thresholds={thresholds} className="text-sm px-2.5 py-1" />
           </div>
 
@@ -602,10 +658,6 @@ function StudentDashboard({
                 style={{ width: `${progress.percent}%` }}
               />
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-xs font-bold text-muted-foreground">최근 경기 흐름</span>
-              <RecentDots recent={student.recent} size="lg" />
-            </div>
           </div>
 
           {/* 휴면 감점 카운트다운 */}
@@ -635,80 +687,24 @@ function StudentDashboard({
         </div>
       </Card>
 
-      {/* 최근 경기 기록 (승/패 + 상대 별명, 점수·RP 변동 없음) */}
-      <Card className="border-border/60 bg-card/45 backdrop-blur-xl shadow-lg">
-        <div className="flex items-center justify-between border-b border-border/30 px-5 py-4">
-          <h3 className="text-base font-black tracking-tight text-foreground flex items-center gap-1.5">
-            <Trophy className="size-4.5 text-neon-blue" />
-            나의 최근 경기
-          </h3>
-          <span className="text-xs text-muted-foreground font-semibold">{matchesLoading ? "불러오는 중…" : `총 ${myMatches.length}경기`}</span>
-        </div>
-        {matchesLoading && myMatches.length === 0 ? (
-          <div className="text-center py-14 px-4">
-            <div className="size-8 mx-auto mb-3 rounded-full border-4 border-muted/30 border-t-neon-blue animate-spin" />
-            <p className="text-sm font-semibold text-muted-foreground">경기 기록을 불러오는 중…</p>
-          </div>
-        ) : myMatches.length === 0 ? (
-          <div className="text-center py-14 px-4">
-            <Calendar className="size-10 text-muted-foreground/60 mx-auto mb-3" />
-            <p className="text-sm font-semibold text-muted-foreground">아직 경기 기록이 없습니다.</p>
-            <p className="text-xs text-muted-foreground/80 mt-1">
-              경기 결과가 등록되면 여기에 실시간으로 나타납니다!
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-border/30">
-            {myMatches.slice(0, 20).map((m) => {
-              const isTeamA = m.playerAId === student.id || m.playerA2Id === student.id;
-              const oppIds = isTeamA
-                ? ([m.playerBId, m.playerB2Id].filter(Boolean) as string[])
-                : ([m.playerAId, m.playerA2Id].filter(Boolean) as string[]);
-              const oppNames =
-                oppIds
-                  .map((id) => {
-                    const o = students.find((s) => s.id === id);
-                    return o ? displayIdentity(o) : null;
-                  })
-                  .filter(Boolean)
-                  .join(" & ") || "탈퇴한 학생";
-              const isWin = isTeamA ? m.scoreA > m.scoreB : m.scoreB > m.scoreA;
-              const dateStr = new Date(m.date).toLocaleDateString("ko-KR", {
-                month: "short",
-                day: "numeric",
-              });
-              return (
-                <div
-                  key={m.id}
-                  className="flex items-center justify-between gap-3 px-5 py-3.5 hover:bg-accent/15 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={cn(
-                        "flex size-10 items-center justify-center rounded-full text-[11px] font-black border",
-                        isWin
-                          ? "bg-win/15 border-win/40 text-win"
-                          : "bg-loss/15 border-loss/40 text-loss",
-                      )}
-                    >
-                      {isWin ? "WIN" : "LOSE"}
-                    </div>
-                    <span className="font-bold text-sm text-foreground">vs {oppNames}</span>
-                  </div>
-                  <span className="text-[11px] text-muted-foreground font-semibold flex items-center gap-1">
-                    <Calendar className="size-3" />
-                    {dateStr}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
+      {/* 나의 전적 — 프로필과 같은 행 */}
+      <MyStatsSummary student={student} matches={matches} matchesLoading={matchesLoading} />
+      </div>
 
-      {/* 업적 (기존 컴포넌트 재사용 — RP/승률 노출 없음) */}
-      <MyAchievements studentId={student.id} />
+      {/* 경기 스타일 + 나의 라이벌(2명) */}
+      <MyStatsDetail
+        student={student}
+        students={students}
+        matches={matches}
+        matchesLoading={matchesLoading}
+        thresholds={thresholds}
+      />
       </>)}
+
+      {/* 업적 탭 */}
+      {tab === "achievements" && (
+        <MyAchievements studentId={student.id} />
+      )}
     </div>
   );
 }

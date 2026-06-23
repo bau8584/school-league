@@ -5,21 +5,21 @@ import { TierBadge } from "./TierBadge";
 import { GenderMark } from "./GenderMark";
 import { cn } from "@/lib/utils";
 import { 
-  Swords, 
-  Target, 
-  Sparkles, 
+  Swords,
+  Sparkles,
   AlertCircle, 
   X, 
   Dices, 
-  Award, 
-  Building2, 
-  Flame, 
+  Award,
+  Flame,
   ArrowRight, 
   Users, 
   RotateCcw, 
   Trophy,
   UserCheck,
-  UserPlus
+  UserPlus,
+  ChevronDown,
+  Search
 } from "lucide-react";
 import type { Student, Match, TierName } from "@/lib/league-types";
 import { getTier } from "@/lib/league-types";
@@ -38,6 +38,54 @@ const TIER_RANK_MAP: Record<string, number> = {
   Platinum: 4,
   Diamond: 5
 };
+
+type RecTag = { label: string; style: string; desc: string };
+
+// 태그 칩 — 클릭 시 설명 펼침(접이식). 항상 노출하던 설명 리스트를 대체.
+function TagAccordion({ tags }: { tags: RecTag[] }) {
+  const [open, setOpen] = useState<string | null>(null);
+  if (!tags || tags.length === 0) return null;
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap gap-1">
+        {tags.map((tag) => (
+          <button
+            key={tag.label}
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setOpen(open === tag.label ? null : tag.label); }}
+            className={cn(
+              "inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider border transition-all active:scale-95 cursor-pointer",
+              tag.style,
+            )}
+          >
+            {tag.label}
+            <ChevronDown className={cn("size-2.5 transition-transform", open === tag.label && "rotate-180")} />
+          </button>
+        ))}
+      </div>
+      {open && (
+        <div className="rounded border border-surface-line bg-surface-deep p-2 text-[10px] leading-relaxed text-strong animate-in fade-in slide-in-from-top-1 duration-150">
+          {tags.find((t) => t.label === open)?.desc}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 예상 RP 미리보기 — 승/패 칩(sky/rose) + "예상 추정치" 라벨
+function RpPreview({ win, loss }: { win: number; loss: number }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-black bg-sky-500/10 text-sky-300 ring-1 ring-inset ring-sky-500/20">
+        <span>승</span><span className="font-mono">+{win}</span>
+      </span>
+      <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-black bg-rose-500/10 text-rose-300 ring-1 ring-inset ring-rose-500/20">
+        <span>패</span><span className="font-mono">{loss}</span>
+      </span>
+      <span className="text-[9px] text-soft">예상 추정치</span>
+    </div>
+  );
+}
 
 export function MatchRecommend({
   students,
@@ -83,6 +131,7 @@ export function MatchRecommend({
   // Local states for MatchRecommend 2.0
   const [gameType, setGameType] = useState<"single" | "double">("single");
   const [selectedTeammateId, setSelectedTeammateId] = useState<string | null>(null);
+  const [teammateSearch, setTeammateSearch] = useState("");
 
   // Active analysis player profile
   const player = students.find((s) => s.id === sel.studentId) ?? null;
@@ -569,56 +618,90 @@ export function MatchRecommend({
       candidates = classmates;
     }
 
-    // Partner history (last 5 double matches)
-    const recentPartnerIds = new Set<string>();
-    const doubleMatches = playerMatches.filter(m => m.matchType === "double");
-    doubleMatches.slice(0, 5).forEach((m) => {
+    // 후보별 "같은 팀으로 뛴 횟수" 집계 (시즌 전체 복식 기록 기준)
+    // → 다양성 신호: 한 번도 안 짚은 친구일수록 높게.
+    const pairCountByCandidate = new Map<string, number>();
+    playerMatches.forEach((m) => {
+      if (m.matchType !== "double") return;
       const isOnTeamA = m.playerAId === player.id || m.playerA2Id === player.id;
-      const partnerId = isOnTeamA 
+      const partnerId = isOnTeamA
         ? (m.playerAId === player.id ? m.playerA2Id : m.playerAId)
         : (m.playerBId === player.id ? m.playerB2Id : m.playerBId);
-      if (partnerId) recentPartnerIds.add(partnerId);
+      if (partnerId) pairCountByCandidate.set(partnerId, (pairCountByCandidate.get(partnerId) ?? 0) + 1);
     });
 
     const scored = candidates.map((candidate) => {
-      let score = 100;
+      const pairCount = pairCountByCandidate.get(candidate.id) ?? 0;
+      const rpDiff = Math.abs(player.rp - candidate.rp);
 
-      const playerTier = getTier(player.rp, thresholds);
-      const candidateTier = getTier(candidate.rp, thresholds);
-      const playerTierRank = TIER_RANK_MAP[playerTier] ?? 1;
-      const partnerTierRank = TIER_RANK_MAP[candidateTier] ?? 1;
+      // 다양성 점수 (0~100): 안 해본 짝 우선
+      const diversityScore =
+        pairCount === 0 ? 100
+        : pairCount === 1 ? 55
+        : pairCount === 2 ? 35
+        : Math.max(0, 20 - (pairCount - 3) * 10);
 
-      // Mentoring bonus check
-      const minGap = dynamicBonuses?.mentoring?.minTierGap ?? 1;
-      const gap = Math.abs(playerTierRank - partnerTierRank);
-      const isMentoring = !!(dynamicBonuses?.mentoring?.enabled && gap >= minGap);
+      // 실력 균형 점수 (0~100): RP가 가까울수록 높음
+      const balanceScore = Math.max(0, 100 - rpDiff * 0.5);
 
-      // Partner freshness
-      const isFreshPartner = !recentPartnerIds.has(candidate.id);
+      // 50:50 혼합
+      let score = diversityScore * 0.5 + balanceScore * 0.5;
 
       const tags: { label: string; style: string; desc: string }[] = [];
 
-      if (isMentoring) {
-        score += 50;
+      // 다양성(동반 횟수) 등급 태그
+      if (pairCount === 0) {
         tags.push({
-          label: "🎓 멘토링 확정",
-          style: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-          desc: `티어 격차가 멘토링 조건(최소 ${minGap}단계)을 만족하여 승리 시 멘토링 보너스를 획득합니다.`
-        });
-      }
-
-      if (isFreshPartner) {
-        score += 40;
-        tags.push({
-          label: "✨ 신선한 파트너",
+          label: "🌟 처음 만나는 짝꿍",
           style: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-          desc: "최근 경기 동안 같은 팀으로 호흡을 맞춘 적이 없는 파트너입니다."
+          desc: "이번 시즌 한 번도 같은 팀으로 뛴 적이 없어요. 새로운 친구와 호흡을 맞춰볼 좋은 기회예요!"
+        });
+      } else if (pairCount <= 2) {
+        tags.push({
+          label: "🔄 가끔 호흡 맞춘 사이",
+          style: "bg-sky-500/15 text-sky-300 border-sky-500/30",
+          desc: `이번 시즌 ${pairCount}번 같은 팀이었어요. 한 번 더 손발을 맞춰볼까요?`
+        });
+      } else {
+        tags.push({
+          label: "👯 자주 함께한 단골",
+          style: "bg-slate-700/40 text-strong border-slate-600/40",
+          desc: `이번 시즌 ${pairCount}번이나 같은 팀이었어요. 가끔은 새로운 친구와도 팀을 이뤄보세요!`
         });
       }
 
-      // Proximity index gap (balanced skill)
-      const rpDiff = Math.abs(player.rp - candidate.rp);
-      if (rpDiff <= 150) score += (150 - rpDiff) * 0.2;
+      // 실력 짝꿍 (균형)
+      if (rpDiff <= 100) {
+        tags.push({
+          label: "⚖️ 실력 짝꿍",
+          style: "bg-neon-blue/15 text-neon-blue border-neon-blue/30",
+          desc: "RP가 비슷해 손발이 잘 맞는 균형 잡힌 복식 짝꿍이에요."
+        });
+      }
+
+      // 함께 시작(신입 포함)
+      if (candidate.wins + candidate.losses < 5) {
+        score += 10;
+        tags.push({
+          label: "🌱 함께 시작",
+          style: "bg-purple-500/15 text-purple-400 border-purple-500/30",
+          desc: "아직 경기 경험이 적은 친구예요. 함께 팀을 이뤄 리그를 즐겨보세요!"
+        });
+      }
+
+      // 멘토링 (설정 활성 시에만)
+      const playerTierRank = TIER_RANK_MAP[getTier(player.rp, thresholds)] ?? 1;
+      const partnerTierRank = TIER_RANK_MAP[getTier(candidate.rp, thresholds)] ?? 1;
+      const minGap = dynamicBonuses?.mentoring?.minTierGap ?? 1;
+      const isMentoring = !!(dynamicBonuses?.mentoring?.enabled && Math.abs(playerTierRank - partnerTierRank) >= minGap);
+      if (isMentoring) {
+        score += 10;
+        tags.push({
+          label: "🎓 멘토링",
+          style: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+          desc: `티어 격차가 멘토링 조건(최소 ${minGap}단계)을 만족해, 승리 시 멘토링 보너스를 얻어요.`
+        });
+      }
 
       return {
         student: candidate,
@@ -760,38 +843,24 @@ export function MatchRecommend({
   return (
     <div className="space-y-6">
       
-      {/* 1. Selector Section */}
-      <Card className="border-slate-800 bg-slate-950 p-5 shadow-2xl relative overflow-hidden">
-        <div className="absolute right-0 top-0 opacity-5 pointer-events-none">
-          <Target className="size-48 text-neon-blue" />
-        </div>
-        
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-neon-blue">
-            <Target className="size-5 animate-pulse" />
-            <h3 className="font-black text-lg">AI 매치 추천</h3>
-          </div>
-          {player && !isStudentView && (
-            <button
-              onClick={() => {
-                onSelChange({ grade: sel.grade, classNum: sel.classNum, studentId: null });
-                setSelectedTeammateId(null);
-              }}
-              className="flex items-center gap-1 rounded-md px-2.5 py-1 text-xs text-slate-400 hover:text-slate-100 hover:bg-slate-900 border border-slate-800 transition-all font-bold"
-            >
-              <RotateCcw className="size-3" /> 선수 초기화
-            </button>
-          )}
-        </div>
-
-        {/* Compact Button Grid selectors (only visible if not student view) */}
+      {/* Compact Button Grid selectors (only visible if not student view) */}
         {!isStudentView && !player && (
-          <div className="flex flex-col gap-4 bg-slate-900/60 p-4 rounded-xl border border-slate-800/80">
-            <div className="text-xs text-slate-450 font-bold uppercase tracking-wider">매치 추천 대상 학생을 선택하세요</div>
-            
+          <Card className="border-surface-line bg-surface-panel p-5 backdrop-blur flex flex-col gap-4">
+
+            {/* 안내 헤더 — 빈 화면에 바로 학년 그리드가 뜨지 않도록 맥락 제공 */}
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-neon-blue/30 bg-neon-blue/10">
+                <Sparkles className="size-4.5 text-neon-blue" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-black text-strong">추천받을 선수 선택</h3>
+                <p className="text-[11px] text-soft">학년 → 반 → 학생을 고르면 맞춤 대전 상대를 추천해 드려요</p>
+              </div>
+            </div>
+
             {/* 1. Grade Select Button Grid */}
             <div className="space-y-2">
-              <label className="text-[11px] font-bold text-slate-400 block">1. 학년 선택</label>
+              <label className="text-[11px] font-bold text-soft block">1. 학년 선택</label>
               <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                 {availableGrades.map((g) => (
                   <button
@@ -804,8 +873,8 @@ export function MatchRecommend({
                     className={cn(
                       "h-10 rounded-lg border text-xs font-black transition-all active:scale-95 flex items-center justify-center cursor-pointer",
                       sel.grade === g
-                        ? "border-neon-blue bg-neon-blue/20 text-neon-blue shadow-[0_0_12px_rgba(0,180,216,0.2)]"
-                        : "border-slate-800 bg-slate-950 text-slate-400 hover:text-slate-200"
+                        ? "border-neon-blue bg-neon-blue/20 text-neon-blue glow-primary"
+                        : "border-surface-line bg-surface-deep text-soft hover:text-strong"
                     )}
                   >
                     {g}학년
@@ -817,7 +886,7 @@ export function MatchRecommend({
             {/* 2. Class Select Button Grid */}
             {sel.grade != null && (
               <div className="space-y-2 animate-in slide-in-from-top-1 duration-200">
-                <label className="text-[11px] font-bold text-slate-400 block">2. 반 선택</label>
+                <label className="text-[11px] font-bold text-soft block">2. 반 선택</label>
                 <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
                   {classesForSel.map((c) => (
                     <button
@@ -830,15 +899,15 @@ export function MatchRecommend({
                       className={cn(
                         "h-10 rounded-lg border text-xs font-black transition-all active:scale-95 flex items-center justify-center cursor-pointer",
                         sel.classNum === c
-                          ? "border-neon-blue bg-neon-blue/20 text-neon-blue shadow-[0_0_12px_rgba(0,180,216,0.2)]"
-                          : "border-slate-800 bg-slate-950 text-slate-400 hover:text-slate-200"
+                          ? "border-neon-blue bg-neon-blue/20 text-neon-blue glow-primary"
+                          : "border-surface-line bg-surface-deep text-soft hover:text-strong"
                       )}
                     >
                       {c}반
                     </button>
                   ))}
                   {classesForSel.length === 0 && (
-                    <span className="text-xs text-slate-500 py-1 col-span-full">등록된 반이 없습니다.</span>
+                    <span className="text-xs text-soft py-1 col-span-full">등록된 반이 없습니다.</span>
                   )}
                 </div>
               </div>
@@ -847,180 +916,167 @@ export function MatchRecommend({
             {/* 3. Student Select Button Grid */}
             {sel.classNum != null && (
               <div className="space-y-2 animate-in slide-in-from-top-1 duration-200">
-                <label className="text-[11px] font-bold text-slate-400 block">3. 학생 선택</label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <label className="text-[11px] font-bold text-soft block">3. 학생 선택</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
                   {rosterForSel.map((s) => (
                     <button
                       key={s.id}
                       type="button"
                       onClick={() => onSelChange({ ...sel, studentId: s.id })}
                       className={cn(
-                        "relative rounded-lg border p-3 flex flex-col justify-between items-center text-center transition-all h-20 hover:border-neon-blue/60 hover:bg-slate-900/60 cursor-pointer w-full overflow-hidden",
+                        "relative rounded-lg border p-3 flex flex-col justify-between items-center text-center transition-all h-20 hover:border-neon-blue/60 hover:bg-surface-panel cursor-pointer w-full overflow-hidden",
                         sel.studentId === s.id
-                          ? "border-neon-blue bg-neon-blue/10 text-neon-blue shadow-[0_0_12px_rgba(0,180,216,0.15)]"
-                          : "border-slate-800 bg-slate-950/85 text-slate-300"
+                          ? "border-neon-blue bg-neon-blue/10 text-neon-blue glow-primary"
+                          : "border-surface-line bg-surface-deep text-strong"
                       )}
                     >
-                      <span className="absolute top-1 left-1.5 text-[9px] text-slate-500 font-mono">
+                      <span className="absolute top-1 left-1.5 text-[9px] text-soft font-mono">
                         {s.number}번
                       </span>
                       <GenderMark 
                         gender={s.gender} 
                         className="absolute top-1 right-1.5 size-3 text-[8px]" 
                       />
-                      <span className="text-xs font-black mt-2 text-slate-100">{s.name}</span>
+                      <span className="text-xs font-black mt-2 text-strong">{s.realName || s.name}</span>
                       <div className="mt-1 flex items-center gap-1">
-                        <span className="text-[9px] text-slate-450 font-mono font-bold">{s.rp} RP</span>
+                        <span className="text-[9px] text-soft font-mono font-bold">{s.rp} RP</span>
                         <TierBadge rp={s.rp} thresholds={thresholds} />
                       </div>
                     </button>
                   ))}
                   {rosterForSel.length === 0 && (
-                    <span className="text-xs text-slate-500 py-1 col-span-full">반에 학생이 없습니다.</span>
+                    <span className="text-xs text-soft py-1 col-span-full">반에 학생이 없습니다.</span>
                   )}
                 </div>
               </div>
             )}
-          </div>
+          </Card>
         )}
 
 
         {/* Profile Card if student view or player selected */}
         {player && (
-          <div className="rounded-xl border border-neon-blue/40 bg-slate-900/60 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="relative rounded-xl border border-neon-blue/40 bg-surface-panel p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            {!isStudentView && (
+              <button
+                onClick={() => {
+                  onSelChange({ grade: sel.grade, classNum: sel.classNum, studentId: null });
+                  setSelectedTeammateId(null);
+                }}
+                className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1 rounded-md px-2.5 py-1 text-xs text-soft hover:text-strong hover:bg-surface-panel border border-surface-line transition-all font-bold"
+              >
+                <RotateCcw className="size-3" /> 선수 초기화
+              </button>
+            )}
             <div>
-              <div className="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">
+              <div className="text-[10px] text-soft font-semibold tracking-wider uppercase">
                 {player.grade}학년 {player.classNum}반 · {player.number}번 선수
               </div>
-              <div className="mt-1 flex items-center gap-2 text-xl font-black text-slate-100">
+              <div className="mt-1 flex items-center gap-2 text-xl font-black text-strong">
                 <GenderMark gender={player.gender} className="size-5 text-[10px]" />
-                {player.name}
+                {player.realName || player.name}
               </div>
               <div className="mt-2 flex items-center gap-2.5">
                 <TierBadge rp={player.rp} thresholds={thresholds} />
                 <span className="font-mono text-xs text-neon-blue font-bold">{player.rp} RP</span>
-                <span className="text-[10px] text-slate-400 font-semibold">({player.wins}승 {player.losses}패)</span>
+                <span className="text-[10px] text-soft font-semibold">({player.wins}승 {player.losses}패)</span>
               </div>
             </div>
 
-            {/* Game Mode select buttons */}
-            <div className="flex flex-col gap-2 min-w-[200px]">
-              <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">경기 모드 선택</span>
-              <div className="flex gap-1.5">
-                <button
-                  onClick={() => {
-                    setGameType("single");
-                    setSelectedTeammateId(null);
-                  }}
-                  className={cn(
-                    "flex-1 py-1.5 px-3 rounded-lg border font-black text-xs transition-all active:scale-95 flex items-center justify-center gap-1",
-                    gameType === "single"
-                      ? "border-neon-blue bg-neon-blue/10 text-neon-blue shadow"
-                      : "border-slate-800 bg-slate-950 text-slate-400 hover:text-slate-200"
-                  )}
-                >
-                  <Swords className="size-3.5" /> 단식 (1v1)
-                </button>
-                <button
-                  onClick={() => setGameType("double")}
-                  className={cn(
-                    "flex-1 py-1.5 px-3 rounded-lg border font-black text-xs transition-all active:scale-95 flex items-center justify-center gap-1",
-                    gameType === "double"
-                      ? "border-neon-green bg-neon-green/10 text-neon-green shadow"
-                      : "border-slate-800 bg-slate-950 text-slate-400 hover:text-slate-200"
-                  )}
-                >
-                  <Users className="size-3.5" /> 복식 (2v2)
-                </button>
+            {/* 경기 모드 + 매칭 범위 (통합) */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:gap-5">
+              {/* 경기 모드 */}
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[10px] text-soft font-bold block uppercase tracking-wider">경기 모드</span>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => {
+                      setGameType("single");
+                      setSelectedTeammateId(null);
+                    }}
+                    className={cn(
+                      "py-1.5 px-3 rounded-lg border font-black text-xs transition-all active:scale-95 flex items-center justify-center gap-1 whitespace-nowrap",
+                      gameType === "single"
+                        ? "border-neon-blue bg-neon-blue/10 text-neon-blue shadow"
+                        : "border-surface-line bg-surface-deep text-soft hover:text-strong"
+                    )}
+                  >
+                    <Swords className="size-3.5" /> 단식
+                  </button>
+                  <button
+                    onClick={() => setGameType("double")}
+                    className={cn(
+                      "py-1.5 px-3 rounded-lg border font-black text-xs transition-all active:scale-95 flex items-center justify-center gap-1 whitespace-nowrap",
+                      gameType === "double"
+                        ? "border-neon-green bg-neon-green/10 text-neon-green shadow"
+                        : "border-surface-line bg-surface-deep text-soft hover:text-strong"
+                    )}
+                  >
+                    <Users className="size-3.5" /> 복식
+                  </button>
+                </div>
+              </div>
+
+              {/* 매칭 범위 */}
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[10px] text-soft font-bold block uppercase tracking-wider">매칭 범위</span>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => onModeChange("class")}
+                    className={cn(
+                      "py-1.5 px-3 rounded-lg border font-black text-xs transition-all active:scale-95 whitespace-nowrap",
+                      mode === "class"
+                        ? "border-neon-blue bg-neon-blue/10 text-neon-blue shadow"
+                        : "border-surface-line bg-surface-deep text-soft hover:text-strong"
+                    )}
+                  >
+                    우리 반
+                  </button>
+                  <button
+                    onClick={() => {
+                      onModeChange("otherClass");
+                      const diffClasses = availableClassesForGrade.filter((c) => c !== player.classNum);
+                      if (diffClasses.length > 0 && targetClass === null) {
+                        onTargetClassChange(diffClasses[0]);
+                      }
+                    }}
+                    className={cn(
+                      "py-1.5 px-3 rounded-lg border font-black text-xs transition-all active:scale-95 whitespace-nowrap",
+                      mode === "otherClass"
+                        ? "border-neon-green bg-neon-green/10 text-neon-green shadow"
+                        : "border-surface-line bg-surface-deep text-soft hover:text-strong"
+                    )}
+                  >
+                    다른 반
+                  </button>
+                  <button
+                    onClick={() => {
+                      onModeChange("otherGrade");
+                      const diffGrades = availableGrades.filter((g) => g !== player.grade);
+                      if (diffGrades.length > 0) {
+                        if (targetGrade === null) onTargetGradeChange(diffGrades[0]);
+                        const cl = students.find((s) => s.grade === diffGrades[0])?.classNum ?? null;
+                        if (cl !== null && targetClass === null) onTargetClassChange(cl);
+                      }
+                    }}
+                    className={cn(
+                      "py-1.5 px-3 rounded-lg border font-black text-xs transition-all active:scale-95 whitespace-nowrap",
+                      mode === "otherGrade"
+                        ? "border-purple-500 bg-purple-500/10 text-purple-400 shadow"
+                        : "border-surface-line bg-surface-deep text-soft hover:text-strong"
+                    )}
+                  >
+                    다른 학년
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         )}
-      </Card>
 
-      {/* Scope Selector Card */}
-      {player && (
-        <Card className="border-slate-800 bg-slate-950 p-5 shadow-xl relative">
-          <div className="mb-4 flex items-center gap-2 text-neon-blue">
-            <Building2 className="size-5" />
-            <h3 className="font-black text-base">🏢 매칭 범위 선택</h3>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-3">
-            <button
-              onClick={() => onModeChange("class")}
-              className={cn(
-                "rounded-xl border p-4 text-left transition-all flex flex-col justify-between h-[105px] active:scale-[0.98]",
-                mode === "class"
-                  ? "border-neon-blue bg-neon-blue/5 shadow-[0_0_15px_rgba(0,180,216,0.1)]"
-                  : "border-slate-800 bg-slate-900/30 hover:border-slate-700 hover:bg-slate-900/50"
-              )}
-            >
-              <div>
-                <div className="flex items-center gap-1.5 font-black text-sm text-slate-200">
-                  <span className="text-lg">🏢</span> 우리 반 매칭
-                </div>
-                <p className="mt-1.5 text-[10px] text-slate-400 leading-relaxed">
-                  내 학년/반 학생들을 대상으로 라이벌을 추천합니다.
-                </p>
-              </div>
-            </button>
-
-            <button
-              onClick={() => {
-                onModeChange("otherClass");
-                const diffClasses = availableClassesForGrade.filter((c) => c !== player.classNum);
-                if (diffClasses.length > 0 && targetClass === null) {
-                  onTargetClassChange(diffClasses[0]);
-                }
-              }}
-              className={cn(
-                "rounded-xl border p-4 text-left transition-all flex flex-col justify-between h-[105px] active:scale-[0.98]",
-                mode === "otherClass"
-                  ? "border-neon-green bg-neon-green/5 shadow-[0_0_15px_rgba(34,197,94,0.1)]"
-                  : "border-slate-800 bg-slate-900/30 hover:border-slate-700 hover:bg-slate-900/50"
-              )}
-            >
-              <div>
-                <div className="flex items-center gap-1.5 font-black text-sm text-slate-200">
-                  <span className="text-lg">⚔️</span> 다른 반 도전
-                </div>
-                <p className="mt-1.5 text-[10px] text-slate-400 leading-relaxed">
-                  학년 내 다른 반 친구들을 타겟으로 삼아 매칭합니다.
-                </p>
-              </div>
-            </button>
-
-            <button
-              onClick={() => {
-                onModeChange("otherGrade");
-                const diffGrades = availableGrades.filter((g) => g !== player.grade);
-                if (diffGrades.length > 0) {
-                  if (targetGrade === null) onTargetGradeChange(diffGrades[0]);
-                  const cl = students.find((s) => s.grade === diffGrades[0])?.classNum ?? null;
-                  if (cl !== null && targetClass === null) onTargetClassChange(cl);
-                }
-              }}
-              className={cn(
-                "rounded-xl border p-4 text-left transition-all flex flex-col justify-between h-[105px] active:scale-[0.98]",
-                mode === "otherGrade"
-                  ? "border-purple-500 bg-purple-500/5 shadow-[0_0_15px_rgba(168,85,247,0.1)]"
-                  : "border-slate-800 bg-slate-900/30 hover:border-slate-700 hover:bg-slate-900/50"
-              )}
-            >
-              <div>
-                <div className="flex items-center gap-1.5 font-black text-sm text-slate-200">
-                  <span className="text-lg">🚀</span> 다른 학년 레이드
-                </div>
-                <p className="mt-1.5 text-[10px] text-slate-400 leading-relaxed">
-                  학년과 반을 자유롭게 지정해 선배/후배 팀에게 도전합니다.
-                </p>
-              </div>
-            </button>
-          </div>
-
-          {mode === "otherClass" && (
-            <div className="mt-4 p-4 rounded-xl border border-neon-green/30 bg-slate-900/50 space-y-3">
+      {/* 매칭 대상 지정 — 다른 반/다른 학년 선택 시에만 노출 */}
+      {player && mode === "otherClass" && (
+        <div className="p-4 rounded-xl border border-neon-green/30 bg-surface-panel space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="text-xs font-bold text-neon-green">⚔️ 대결할 학급(반) 지정</div>
                 <Button
@@ -1043,22 +1099,22 @@ export function MatchRecommend({
                         "rounded-full border px-3.5 py-1 text-xs font-bold transition-all active:scale-95",
                         targetClass === c
                           ? "border-neon-green bg-neon-green/20 text-neon-green"
-                          : "border-slate-800 bg-slate-950 text-slate-400 hover:text-slate-200"
+                          : "border-surface-line bg-surface-deep text-soft hover:text-strong"
                       )}
                     >
                       {c}반
                     </button>
                   ))}
                 {availableClassesForGrade.filter((c) => c !== player.classNum).length === 0 && (
-                  <span className="text-xs text-slate-500 py-1">다른 학급이 등록되지 않았습니다.</span>
+                  <span className="text-xs text-soft py-1">다른 학급이 등록되지 않았습니다.</span>
                 )}
               </div>
             </div>
           )}
 
-          {mode === "otherGrade" && (
-            <div className="mt-4 p-4 rounded-xl border border-purple-500/30 bg-slate-900/50 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-2">
+          {player && mode === "otherGrade" && (
+            <div className="p-4 rounded-xl border border-purple-500/30 bg-surface-panel space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-line pb-2">
                 <div className="text-xs font-bold text-purple-400">🚀 대결할 학년 및 반 지정</div>
                 <Button
                   onClick={handleRandomGradeClass}
@@ -1071,7 +1127,7 @@ export function MatchRecommend({
               </div>
 
               <div className="space-y-1.5">
-                <div className="text-[10px] text-slate-400 font-bold uppercase">1. 학년 선택</div>
+                <div className="text-[10px] text-soft font-bold uppercase">1. 학년 선택</div>
                 <div className="flex flex-wrap gap-1.5">
                   {availableGrades.map((g) => (
                     <button
@@ -1085,10 +1141,10 @@ export function MatchRecommend({
                         "rounded-full border px-3 py-1 text-xs font-bold transition-all active:scale-95",
                         targetGrade === g
                           ? "border-purple-500 bg-purple-500/20 text-purple-400"
-                          : "border-slate-800 bg-slate-950 text-slate-400 hover:text-slate-200"
+                          : "border-surface-line bg-surface-deep text-soft hover:text-strong"
                       )}
                     >
-                      {g}학년 {player.grade === g && <span className="text-[9px] text-slate-500">(내 학년)</span>}
+                      {g}학년 {player.grade === g && <span className="text-[9px] text-soft">(내 학년)</span>}
                     </button>
                   ))}
                 </div>
@@ -1096,7 +1152,7 @@ export function MatchRecommend({
 
               {targetGrade != null && (
                 <div className="space-y-1.5">
-                  <div className="text-[10px] text-slate-400 font-bold uppercase">2. 반 선택</div>
+                  <div className="text-[10px] text-soft font-bold uppercase">2. 반 선택</div>
                   <div className="flex flex-wrap gap-1.5">
                     {availableClassesForTargetGrade.map((c) => (
                       <button
@@ -1106,10 +1162,10 @@ export function MatchRecommend({
                           "rounded-full border px-3 py-1 text-xs font-bold transition-all active:scale-95",
                           targetClass === c
                             ? "border-purple-500 bg-purple-500/20 text-purple-400"
-                            : "border-slate-800 bg-slate-950 text-slate-400 hover:text-slate-200"
+                            : "border-surface-line bg-surface-deep text-soft hover:text-strong"
                         )}
                       >
-                        {c}반 {player.grade === targetGrade && player.classNum === c && <span className="text-[9px] text-slate-500">(내 반)</span>}
+                        {c}반 {player.grade === targetGrade && player.classNum === c && <span className="text-[9px] text-soft">(내 반)</span>}
                       </button>
                     ))}
                   </div>
@@ -1117,8 +1173,6 @@ export function MatchRecommend({
               )}
             </div>
           )}
-        </Card>
-      )}
 
       {/* 2. Flat Single match recommendations */}
       {player && gameType === "single" && (
@@ -1126,12 +1180,12 @@ export function MatchRecommend({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Sparkles className="size-5 text-amber-500 animate-pulse" />
-              <h4 className="font-black text-base text-slate-100">🤖 AI 추천 단식 라이벌</h4>
+              <h4 className="font-black text-base text-strong">🤖 AI 추천 단식 라이벌</h4>
             </div>
             
-            <div className="rounded-full bg-slate-900 border border-slate-800 px-3 py-1 text-[11px] text-slate-400 font-semibold flex items-center gap-1.5 shadow-sm">
+            <div className="rounded-full bg-surface-panel border border-surface-line px-3 py-1 text-[11px] text-soft font-semibold flex items-center gap-1.5 shadow-sm">
               <span className="size-1.5 rounded-full bg-neon-blue animate-ping" />
-              추천 범위: <span className="font-bold text-slate-200">
+              추천 범위: <span className="font-bold text-strong">
                 {mode === "class" && `${player.grade}학년 ${player.classNum}반`}
                 {mode === "otherClass" && `${player.grade}학년 ${targetClass ?? "?"}반`}
                 {mode === "otherGrade" && `${targetGrade ?? "?"}학년 ${targetClass ?? "?"}반`}
@@ -1140,10 +1194,10 @@ export function MatchRecommend({
           </div>
 
           {showPromptToSelect ? (
-            <Card className="flex flex-col items-center justify-center p-12 text-center border-dashed border-slate-800 bg-slate-950/40">
-              <AlertCircle className="size-10 text-slate-500 mb-2" />
-              <div className="text-sm font-bold text-slate-200">도전 타겟이 완벽히 설정되지 않았습니다.</div>
-              <p className="text-xs text-slate-400 mt-1 max-w-sm">
+            <Card className="flex flex-col items-center justify-center p-12 text-center border-dashed border-surface-line bg-surface-deep">
+              <AlertCircle className="size-10 text-soft mb-2" />
+              <div className="text-sm font-bold text-strong">도전 타겟이 완벽히 설정되지 않았습니다.</div>
+              <p className="text-xs text-soft mt-1 max-w-sm">
                 상단 범위 필터에서 반이나 학년을 클릭하거나 🎲 랜덤 버튼을 눌러 지정해 주세요.
               </p>
             </Card>
@@ -1155,22 +1209,22 @@ export function MatchRecommend({
                   return (
                     <Card 
                       key={s.id} 
-                      className="relative overflow-hidden border-slate-800 bg-slate-900/40 p-5 backdrop-blur flex flex-col justify-between hover:border-neon-blue/50 hover:shadow-[0_0_20px_rgba(0,180,216,0.06)] hover:scale-[1.01] transition-all duration-300 group"
+                      className="relative overflow-hidden border-surface-line bg-surface-panel p-5 backdrop-blur flex flex-col justify-between hover:border-neon-blue/50 hover:glow-primary hover:scale-[1.01] transition-all duration-300 group"
                     >
                       {/* Top Ranking Badge */}
-                      <div className="absolute right-4 top-4 font-mono font-black text-3xl opacity-15 text-slate-500 select-none group-hover:scale-110 transition-transform">
+                      <div className="absolute right-4 top-4 font-mono font-black text-3xl opacity-15 text-soft select-none group-hover:scale-110 transition-transform">
                         #{index + 1}
                       </div>
 
                       <div className="space-y-4">
                         {/* Opponent Profile */}
                         <div>
-                          <div className="text-[10px] text-slate-400 font-medium">
+                          <div className="text-[10px] text-soft font-medium">
                             {s.grade}학년 {s.classNum}반 · {s.number}번
                           </div>
-                          <div className="mt-0.5 flex items-center gap-1.5 text-lg font-black text-slate-100">
+                          <div className="mt-0.5 flex items-center gap-1.5 text-lg font-black text-strong">
                             <GenderMark gender={s.gender} className="size-4.5 text-[9px]" />
-                            {s.name}
+                            {s.realName || s.name}
                           </div>
                         </div>
 
@@ -1178,49 +1232,14 @@ export function MatchRecommend({
                         <div className="flex items-center gap-2">
                           <TierBadge rp={s.rp} thresholds={thresholds} />
                           <span className="font-mono text-xs text-neon-blue font-bold">{s.rp} RP</span>
-                          <span className="text-[10px] text-slate-500">({s.wins}승 {s.losses}패)</span>
+                          <span className="text-[10px] text-soft">({s.wins}승 {s.losses}패)</span>
                         </div>
 
                         {/* Expected RP win/loss preview */}
-                        {(() => {
-                          const expectedWin = getExpectedDelta(player, s, true);
-                          const expectedLoss = getExpectedDelta(player, s, false);
-                          return (
-                            <div className="text-[11px] bg-slate-950/45 px-3 py-2 rounded-lg border border-slate-800/60 flex flex-col gap-1">
-                              <div className="text-[10px] text-slate-400 font-bold">[예상 RP]</div>
-                              <div className="font-mono text-xs font-black flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                                <span className="text-blue-400">[승리 시 +{expectedWin}RP]</span>
-                                <span className="text-red-400">[패배 시 {expectedLoss}RP]</span>
-                              </div>
-                            </div>
-                          );
-                        })()}
+                        <RpPreview win={getExpectedDelta(player, s, true)} loss={getExpectedDelta(player, s, false)} />
 
-                        {/* Smart tags list */}
-                        {rival.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {rival.tags.map((tag) => (
-                              <span 
-                                key={tag.label} 
-                                className={cn("inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider border", tag.style)}
-                                title={tag.desc}
-                              >
-                                {tag.label}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Explaining hover tip - all tags list */}
-                        {rival.tags.length > 0 && (
-                          <div className="space-y-1.5 bg-slate-950/45 p-2.5 rounded border border-slate-800/40">
-                            {rival.tags.map((tag) => (
-                              <div key={tag.label} className="text-[10px] text-slate-300 leading-relaxed">
-                                • {tag.desc}
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                        {/* Smart tags (collapsible) */}
+                        <TagAccordion tags={rival.tags} />
                       </div>
 
                       {/* Action Button */}
@@ -1229,7 +1248,7 @@ export function MatchRecommend({
                           <Swords className="size-3.5" /> 추천 단식 라이벌
                         </div>
                       ) : isReadOnly ? (
-                        <div className="mt-5 w-full text-center py-2 rounded-lg border border-slate-800 bg-slate-900/30 text-slate-500 text-xs font-bold tracking-wide flex items-center justify-center gap-1">
+                        <div className="mt-5 w-full text-center py-2 rounded-lg border border-surface-line bg-surface-panel text-soft text-xs font-bold tracking-wide flex items-center justify-center gap-1">
                           <Swords className="size-3.5 opacity-50" /> 경기하기 (읽기 전용)
                         </div>
                       ) : (
@@ -1244,10 +1263,10 @@ export function MatchRecommend({
                   );
                 })
               ) : (
-                <Card className="col-span-3 flex flex-col items-center justify-center p-12 text-center border-dashed border-slate-850 bg-slate-950/20">
-                  <AlertCircle className="size-10 text-slate-500 mb-2" />
-                  <div className="text-sm font-bold text-slate-200">추천할 수 있는 대전 상대가 없습니다.</div>
-                  <p className="text-xs text-slate-400 mt-1 max-w-sm">
+                <Card className="col-span-3 flex flex-col items-center justify-center p-12 text-center border-dashed border-surface-line bg-surface-deep">
+                  <AlertCircle className="size-10 text-soft mb-2" />
+                  <div className="text-sm font-bold text-strong">추천할 수 있는 대전 상대가 없습니다.</div>
+                  <p className="text-xs text-soft mt-1 max-w-sm">
                     지정된 범위에 등록된 다른 선수가 없거나 최근 2경기 이내에 치른 대결자 중복방지 필터링으로 인해 후보군이 비어 있습니다.
                   </p>
                 </Card>
@@ -1262,14 +1281,14 @@ export function MatchRecommend({
         <div className="space-y-6">
           
           {/* Stage Progress bar */}
-          <div className="flex items-center justify-center gap-2 max-w-md mx-auto py-2 bg-slate-900/30 rounded-full border border-slate-800/60 shadow-sm">
+          <div className="flex items-center justify-center gap-2 max-w-md mx-auto py-2 bg-surface-panel rounded-full border border-surface-line shadow-sm">
             <span className={cn(
               "px-3 py-1.5 rounded-full text-xs font-black transition-all flex items-center gap-1",
               selectedTeammateId == null 
                 ? "bg-neon-green/15 text-neon-green border border-neon-green/30" 
-                : "text-slate-500"
+                : "text-soft"
             )}>
-              <span className="flex size-4 items-center justify-center rounded-full bg-slate-800 text-[10px]">1</span>
+              <span className="flex size-4 items-center justify-center rounded-full bg-surface-line text-[10px]">1</span>
               팀원 선택
             </span>
             <ArrowRight className="size-4 text-slate-700" />
@@ -1277,9 +1296,9 @@ export function MatchRecommend({
               "px-3 py-1.5 rounded-full text-xs font-black transition-all flex items-center gap-1",
               selectedTeammateId != null 
                 ? "bg-neon-green/15 text-neon-green border border-neon-green/30" 
-                : "text-slate-500"
+                : "text-soft"
             )}>
-              <span className="flex size-4 items-center justify-center rounded-full bg-slate-800 text-[10px]">2</span>
+              <span className="flex size-4 items-center justify-center rounded-full bg-surface-line text-[10px]">2</span>
               상대팀 매칭
             </span>
           </div>
@@ -1287,65 +1306,93 @@ export function MatchRecommend({
           {/* Stage 1 Teammate selection view */}
           {selectedTeammateId == null ? (
             <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Users className="size-5 text-neon-green" />
-                <h4 className="font-black text-base text-slate-100">👥 시너지가 기대되는 아군 팀원 후보</h4>
+              <div className="flex justify-end">
+                {/* 팀원 검색 (이름·번호) */}
+                <div className="relative w-full sm:w-56">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-soft" />
+                  <input
+                    type="text"
+                    value={teammateSearch}
+                    onChange={(e) => setTeammateSearch(e.target.value)}
+                    placeholder="이름 또는 번호 검색"
+                    className="w-full rounded-lg border border-surface-line bg-surface-deep py-1.5 pl-8 pr-7 text-xs text-strong placeholder:text-soft focus:border-neon-green/50 focus:outline-none"
+                  />
+                  {teammateSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setTeammateSearch("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-soft hover:text-strong"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
 
+              {(() => {
+                const q = teammateSearch.trim().toLowerCase();
+                const filteredPartners = q
+                  ? partnerRecommendations.filter((c) => {
+                      const s = c.student;
+                      return (s.realName || s.name || "").toLowerCase().includes(q) || String(s.number).includes(q);
+                    })
+                  : partnerRecommendations;
+                return (
               <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-                {partnerRecommendations.length > 0 ? (
-                  partnerRecommendations.map((cand) => {
+                {filteredPartners.length > 0 ? (
+                  filteredPartners.map((cand) => {
                     const s = cand.student;
+                    const rank = partnerRecommendations.findIndex((c) => c.student.id === s.id) + 1;
+                    const rankLabel = rank === 1 ? "🥇 추천 1순위" : rank === 2 ? "🥈 추천 2순위" : rank === 3 ? "🥉 추천 3순위" : `추천 ${rank}순위`;
+                    const rankStyle = rank === 1
+                      ? "bg-neon-green/20 text-neon-green border-neon-green/40"
+                      : rank <= 3
+                        ? "bg-surface-line text-strong border-slate-700"
+                        : "bg-surface-panel text-soft border-surface-line";
                     return (
-                      <Card 
+                      <Card
                         key={s.id}
-                        onClick={() => setSelectedTeammateId(s.id)}
-                        className="border-slate-800 bg-slate-900/30 p-4 hover:border-neon-green/60 hover:bg-slate-900/60 active:scale-[0.98] transition-all cursor-pointer flex flex-col justify-between group"
+                        onClick={() => { setSelectedTeammateId(s.id); setTeammateSearch(""); }}
+                        className={cn(
+                          "p-4 active:scale-[0.98] transition-all cursor-pointer flex flex-col justify-between group",
+                          rank === 1
+                            ? "border-neon-green/50 ring-1 ring-neon-green/30 bg-neon-green/[0.04] hover:bg-neon-green/[0.08]"
+                            : "border-surface-line bg-surface-panel hover:border-neon-green/60 hover:bg-surface-panel",
+                        )}
                       >
                         <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="text-[9px] text-slate-500">{s.grade}학년 {s.classNum}반 · {s.number}번</div>
-                              <div className="font-bold text-slate-100 flex items-center gap-1 mt-0.5">
-                                <GenderMark gender={s.gender} className="size-3.5 text-[8px]" />
-                                {s.name}
-                              </div>
-                            </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-black", rankStyle)}>
+                              {rankLabel}
+                            </span>
                             <span className="text-[10px] font-mono text-neon-green font-bold shrink-0">{s.rp} RP</span>
+                          </div>
+                          <div>
+                            <div className="text-[9px] text-soft">{s.grade}학년 {s.classNum}반 · {s.number}번</div>
+                            <div className="font-bold text-strong flex items-center gap-1 mt-0.5">
+                              <GenderMark gender={s.gender} className="size-3.5 text-[8px]" />
+                              {s.realName || s.name}
+                            </div>
                           </div>
 
                           <div className="flex items-center gap-2">
                             <TierBadge rp={s.rp} thresholds={thresholds} />
-                            <span className="text-[10px] text-slate-500">({s.wins}승 {s.losses}패)</span>
+                            <span className="text-[10px] text-soft">({s.wins}승 {s.losses}패)</span>
                           </div>
 
-                          {cand.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1 pt-1">
-                              {cand.tags.map((tag) => (
-                                <span 
-                                  key={tag.label} 
-                                  className={cn("inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider border", tag.style)}
-                                  title={tag.desc}
-                                >
-                                  {tag.label}
-                                </span>
-                              ))}
-                            </div>
-                          )}
+                          <div className="pt-1">
+                            <TagAccordion tags={cand.tags} />
+                          </div>
 
-                          {/* Explaining tip - all tags list */}
-                          {cand.tags.length > 0 && (
-                            <div className="space-y-1.5 bg-slate-950/45 p-2 rounded border border-slate-800/40 mt-2">
-                              {cand.tags.map((tag) => (
-                                <div key={tag.label} className="text-[10px] text-slate-300 leading-relaxed">
-                                  • {tag.desc}
-                                </div>
-                              ))}
+                          {/* 사회적 넛지 — 1순위에만 */}
+                          {rank === 1 && (
+                            <div className="rounded-lg border border-neon-green/30 bg-neon-green/[0.06] px-2.5 py-2 text-[11px] leading-relaxed text-neon-green/90">
+                              💬 오늘은 <span className="font-black">{s.realName || s.name}</span> 친구와 한 팀이 되어보는 건 어때요? 먼저 “같이 할래?” 하고 인사해볼까요!
                             </div>
                           )}
                         </div>
 
-                        <Button 
+                        <Button
                           size="sm"
                           variant="ghost"
                           className="mt-4 w-full h-8 text-[11px] font-black text-neon-green hover:bg-neon-green/10 bg-neon-green/5 border border-neon-green/20 group-hover:border-neon-green/40 gap-1 active:scale-95"
@@ -1356,15 +1403,19 @@ export function MatchRecommend({
                     );
                   })
                 ) : (
-                  <Card className="col-span-3 flex flex-col items-center justify-center p-12 text-center border-dashed border-slate-850 bg-slate-950/20">
-                    <AlertCircle className="size-10 text-slate-500 mb-2" />
-                    <div className="text-sm font-bold text-slate-200">파트너 추천 후보가 없습니다.</div>
-                    <p className="text-xs text-slate-400 mt-1 max-w-sm">
-                      현재 학년 또는 학급에 등록된 다른 학생 데이터가 비어 있습니다.
+                  <Card className="col-span-3 flex flex-col items-center justify-center p-12 text-center border-dashed border-surface-line bg-surface-deep">
+                    <AlertCircle className="size-10 text-soft mb-2" />
+                    <div className="text-sm font-bold text-strong">
+                      {q ? `"${teammateSearch.trim()}" 검색 결과가 없습니다.` : "파트너 추천 후보가 없습니다."}
+                    </div>
+                    <p className="text-xs text-soft mt-1 max-w-sm">
+                      {q ? "다른 이름이나 번호로 검색해보세요." : "현재 학년 또는 학급에 등록된 다른 학생 데이터가 비어 있습니다."}
                     </p>
                   </Card>
                 )}
               </div>
+                );
+              })()}
             </div>
           ) : (
             // Stage 2 Opponent team auto matching view
@@ -1378,23 +1429,23 @@ export function MatchRecommend({
                       <UserCheck className="size-5" />
                     </div>
                     <div>
-                      <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">우리의 복식 팀원 확정</div>
-                      <div className="text-sm font-black text-slate-100 flex items-center gap-1.5 mt-0.5">
-                        {player.name} & {selectedTeammate.name}
+                      <div className="text-[9px] text-soft font-bold uppercase tracking-wider">우리의 복식 팀원 확정</div>
+                      <div className="text-sm font-black text-strong flex items-center gap-1.5 mt-0.5">
+                        {player.realName || player.name} & {selectedTeammate.realName || selectedTeammate.name}
                       </div>
                       <div className="mt-1 flex items-center gap-2">
-                        <span className="text-[10px] text-slate-500">팀 합산 RP:</span>
+                        <span className="text-[10px] text-soft">팀 합산 RP:</span>
                         <span className="font-mono text-xs text-neon-green font-bold">{player.rp + selectedTeammate.rp} RP</span>
-                        <span className="text-slate-600">|</span>
+                        <span className="text-soft">|</span>
                         <TierBadge rp={selectedTeammate.rp} thresholds={thresholds} />
-                        <span className="text-[10px] text-slate-500">({selectedTeammate.name})</span>
+                        <span className="text-[10px] text-soft">({selectedTeammate.realName || selectedTeammate.name})</span>
                       </div>
                     </div>
                   </div>
 
                   <button
                     onClick={() => setSelectedTeammateId(null)}
-                    className="h-8 px-3.5 rounded-lg border border-slate-800 bg-slate-950 text-slate-400 hover:text-slate-100 hover:bg-slate-900 text-xs font-black tracking-wide flex items-center gap-1 transition-all active:scale-95 shrink-0"
+                    className="h-8 px-3.5 rounded-lg border border-surface-line bg-surface-deep text-soft hover:text-strong hover:bg-surface-panel text-xs font-black tracking-wide flex items-center gap-1 transition-all active:scale-95 shrink-0"
                   >
                     <RotateCcw className="size-3.5" /> 파트너 변경
                   </button>
@@ -1406,12 +1457,12 @@ export function MatchRecommend({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Swords className="size-5 text-neon-green animate-pulse" />
-                    <h4 className="font-black text-base text-slate-100">🤖 AI 엄선 상대팀 추천 (합산 밸런싱)</h4>
+                    <h4 className="font-black text-base text-strong">🤖 AI 엄선 상대팀 추천 (합산 밸런싱)</h4>
                   </div>
                   
-                  <div className="rounded-full bg-slate-900 border border-slate-800 px-3 py-1 text-[11px] text-slate-400 font-semibold flex items-center gap-1.5 shadow-sm">
+                  <div className="rounded-full bg-surface-panel border border-surface-line px-3 py-1 text-[11px] text-soft font-semibold flex items-center gap-1.5 shadow-sm">
                     <span className="size-1.5 rounded-full bg-neon-green animate-ping" />
-                    추천 범위: <span className="font-bold text-slate-200">
+                    추천 범위: <span className="font-bold text-strong">
                       {mode === "class" && `${player.grade}학년 ${player.classNum}반`}
                       {mode === "otherClass" && `${player.grade}학년 ${targetClass ?? "?"}반`}
                       {mode === "otherGrade" && `${targetGrade ?? "?"}학년 ${targetClass ?? "?"}반`}
@@ -1420,10 +1471,10 @@ export function MatchRecommend({
                 </div>
 
                 {showPromptToSelect ? (
-                  <Card className="flex flex-col items-center justify-center p-12 text-center border-dashed border-slate-800 bg-slate-950/40">
-                    <AlertCircle className="size-10 text-slate-500 mb-2" />
-                    <div className="text-sm font-bold text-slate-200">도전 타겟이 완벽히 설정되지 않았습니다.</div>
-                    <p className="text-xs text-slate-400 mt-1 max-w-sm">
+                  <Card className="flex flex-col items-center justify-center p-12 text-center border-dashed border-surface-line bg-surface-deep">
+                    <AlertCircle className="size-10 text-soft mb-2" />
+                    <div className="text-sm font-bold text-strong">도전 타겟이 완벽히 설정되지 않았습니다.</div>
+                    <p className="text-xs text-soft mt-1 max-w-sm">
                       상단 범위 필터에서 반이나 학년을 지정해 주세요.
                     </p>
                   </Card>
@@ -1448,9 +1499,9 @@ export function MatchRecommend({
                         return (
                           <Card 
                             key={`${pair.o1.id}-${pair.o2.id}`}
-                            className="relative overflow-hidden border-slate-800 bg-slate-900/40 p-5 backdrop-blur flex flex-col justify-between hover:border-neon-green/50 hover:shadow-[0_0_20px_rgba(34,197,94,0.06)] hover:scale-[1.01] transition-all duration-300 group"
+                            className="relative overflow-hidden border-surface-line bg-surface-panel p-5 backdrop-blur flex flex-col justify-between hover:border-neon-green/50 hover:shadow-[0_0_20px_rgba(34,197,94,0.06)] hover:scale-[1.01] transition-all duration-300 group"
                           >
-                            <div className="absolute right-4 top-4 font-mono font-black text-3xl opacity-15 text-slate-500 select-none group-hover:scale-110 transition-transform">
+                            <div className="absolute right-4 top-4 font-mono font-black text-3xl opacity-15 text-soft select-none group-hover:scale-110 transition-transform">
                               #{index + 1}
                             </div>
 
@@ -1461,17 +1512,17 @@ export function MatchRecommend({
                                   추천 매칭팀
                                 </span>
                                 
-                                <div className="space-y-2 border-b border-slate-800 pb-3">
+                                <div className="space-y-2 border-b border-surface-line pb-3">
                                   {/* Opponent 1 */}
                                   <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-1.5">
                                       <GenderMark gender={pair.o1.gender} className="size-3.5 text-[8px]" />
-                                      <span className="text-xs font-bold text-slate-100">{pair.o1.name}</span>
-                                      <span className="text-[9px] text-slate-500">{pair.o1.grade}학년 {pair.o1.classNum}반</span>
+                                      <span className="text-xs font-bold text-strong">{pair.o1.realName || pair.o1.name}</span>
+                                      <span className="text-[9px] text-soft">{pair.o1.grade}학년 {pair.o1.classNum}반</span>
                                     </div>
                                     <div className="flex items-center gap-1.5">
                                       <TierBadge rp={pair.o1.rp} thresholds={thresholds} />
-                                      <span className="font-mono text-[10px] text-slate-400 font-bold">{pair.o1.rp} RP</span>
+                                      <span className="font-mono text-[10px] text-soft font-bold">{pair.o1.rp} RP</span>
                                     </div>
                                   </div>
 
@@ -1479,12 +1530,12 @@ export function MatchRecommend({
                                   <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-1.5">
                                       <GenderMark gender={pair.o2.gender} className="size-3.5 text-[8px]" />
-                                      <span className="text-xs font-bold text-slate-100">{pair.o2.name}</span>
-                                      <span className="text-[9px] text-slate-500">{pair.o2.grade}학년 {pair.o2.classNum}반</span>
+                                      <span className="text-xs font-bold text-strong">{pair.o2.realName || pair.o2.name}</span>
+                                      <span className="text-[9px] text-soft">{pair.o2.grade}학년 {pair.o2.classNum}반</span>
                                     </div>
                                     <div className="flex items-center gap-1.5">
                                       <TierBadge rp={pair.o2.rp} thresholds={thresholds} />
-                                      <span className="font-mono text-[10px] text-slate-400 font-bold">{pair.o2.rp} RP</span>
+                                      <span className="font-mono text-[10px] text-soft font-bold">{pair.o2.rp} RP</span>
                                     </div>
                                   </div>
                                 </div>
@@ -1493,11 +1544,11 @@ export function MatchRecommend({
                               {/* RP Summary */}
                               <div className="flex items-center justify-between text-xs">
                                 <div>
-                                  <span className="text-[10px] text-slate-400 block">상대 합산 RP</span>
-                                  <span className="font-mono font-black text-slate-200">{pair.combinedRp} RP</span>
+                                  <span className="text-[10px] text-soft block">상대 합산 RP</span>
+                                  <span className="font-mono font-black text-strong">{pair.combinedRp} RP</span>
                                 </div>
                                 <div className="text-right">
-                                  <span className="text-[10px] text-slate-400 block">격차</span>
+                                  <span className="text-[10px] text-soft block">격차</span>
                                   <span className={cn(
                                     "font-mono font-black",
                                     delta > 0 ? "text-rose-400" : "text-emerald-400"
@@ -1508,48 +1559,16 @@ export function MatchRecommend({
                               </div>
 
                               {/* Expected RP win/loss preview */}
-                              {(() => {
-                                const expectedWin = getExpectedDelta(player, pair.o1, true, selectedTeammate, pair.o2);
-                                const expectedLoss = getExpectedDelta(player, pair.o1, false, selectedTeammate, pair.o2);
-                                return (
-                                  <div className="text-[11px] bg-slate-950/45 px-3 py-2 rounded-lg border border-slate-800/60 flex flex-col gap-1">
-                                    <div className="text-[10px] text-slate-400 font-bold">[예상 RP]</div>
-                                    <div className="font-mono text-xs font-black flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                                      <span className="text-blue-400">[승리 시 +{expectedWin}RP]</span>
-                                      <span className="text-red-400">[패배 시 {expectedLoss}RP]</span>
-                                    </div>
-                                  </div>
-                                );
-                              })()}
+                              <RpPreview
+                                win={getExpectedDelta(player, pair.o1, true, selectedTeammate, pair.o2)}
+                                loss={getExpectedDelta(player, pair.o1, false, selectedTeammate, pair.o2)}
+                              />
 
-                              {/* Smart tags list */}
-                              {pair.tags && pair.tags.length > 0 && (
-                                <div className="flex flex-wrap gap-1">
-                                  {pair.tags.map((tag) => (
-                                    <span 
-                                      key={tag.label} 
-                                      className={cn("inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider border", tag.style)}
-                                      title={tag.desc}
-                                    >
-                                      {tag.label}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-
-                              {/* Explaining tip - all tags list */}
-                              {pair.tags && pair.tags.length > 0 && (
-                                <div className="space-y-1.5 bg-slate-950/45 p-2 rounded border border-slate-800/40">
-                                  {pair.tags.map((tag) => (
-                                    <div key={tag.label} className="text-[10px] text-slate-300 leading-relaxed">
-                                      • {tag.desc}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
+                              {/* Smart tags (collapsible) */}
+                              <TagAccordion tags={pair.tags ?? []} />
 
                               {/* Analytical commentary */}
-                              <div className="text-[10px] text-slate-400 bg-slate-950/40 p-2.5 rounded border border-slate-800/40 leading-relaxed min-h-[50px]">
+                              <div className="text-[10px] text-soft bg-surface-deep p-2.5 rounded border border-surface-line leading-relaxed min-h-[50px]">
                                 {analysis}
                               </div>
                             </div>
@@ -1560,7 +1579,7 @@ export function MatchRecommend({
                                 <Swords className="size-3.5 animate-pulse" /> 추천 복식 라이벌
                               </div>
                             ) : isReadOnly ? (
-                              <div className="mt-5 w-full text-center py-2 rounded-lg border border-slate-800 bg-slate-900/30 text-slate-500 text-xs font-bold tracking-wide flex items-center justify-center gap-1">
+                              <div className="mt-5 w-full text-center py-2 rounded-lg border border-surface-line bg-surface-panel text-soft text-xs font-bold tracking-wide flex items-center justify-center gap-1">
                                 <Swords className="size-3.5 opacity-50" /> 경기하기 (읽기 전용)
                               </div>
                             ) : (
@@ -1575,10 +1594,10 @@ export function MatchRecommend({
                         );
                       })
                     ) : (
-                      <Card className="col-span-3 flex flex-col items-center justify-center p-12 text-center border-dashed border-slate-850 bg-slate-950/20">
-                        <AlertCircle className="size-10 text-slate-500 mb-2" />
-                        <div className="text-sm font-bold text-slate-200">매칭 가능한 상대 팀이 없습니다.</div>
-                        <p className="text-xs text-slate-400 mt-1 max-w-sm">
+                      <Card className="col-span-3 flex flex-col items-center justify-center p-12 text-center border-dashed border-surface-line bg-surface-deep">
+                        <AlertCircle className="size-10 text-soft mb-2" />
+                        <div className="text-sm font-bold text-strong">매칭 가능한 상대 팀이 없습니다.</div>
+                        <p className="text-xs text-soft mt-1 max-w-sm">
                           지정 범위 내에 등록된 학생이 부족하거나 팀원과 아군을 제외한 선수 데이터가 모자랍니다.
                         </p>
                       </Card>
@@ -1597,26 +1616,26 @@ export function MatchRecommend({
         if (!targetStudent) return null;
         return (
           <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-300">
-            <div className="relative w-full max-w-md overflow-hidden border border-neon-blue/30 bg-background/95 rounded-2xl p-6 md:p-8 shadow-[0_0_50px_rgba(0,180,216,0.2)] flex flex-col items-center animate-in zoom-in duration-300">
+            <div className="relative w-full max-w-md overflow-hidden border border-neon-blue/30 bg-background/95 rounded-2xl p-6 md:p-8 glow-primary flex flex-col items-center animate-in zoom-in duration-300">
               <div className="absolute inset-0 bg-[linear-gradient(rgba(18,18,18,0.2)_1px,transparent_1px),linear-gradient(90deg,rgba(18,18,18,0.2)_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none opacity-20" />
               
               <button 
                 onClick={handleCancelGender}
-                className="absolute right-4 top-4 text-slate-400 hover:text-slate-100 hover:bg-slate-900 p-1.5 rounded-lg transition-all"
+                className="absolute right-4 top-4 text-soft hover:text-strong hover:bg-surface-panel p-1.5 rounded-lg transition-all"
                 title="취소 및 뒤로가기"
               >
                 <X className="size-5" />
               </button>
 
               <div className="relative z-10 flex flex-col items-center text-center w-full">
-                <div className="flex size-14 items-center justify-center rounded-full bg-neon-blue/15 border border-neon-blue/30 text-neon-blue shadow-[0_0_30px_rgba(0,180,216,0.3)] mb-4 animate-pulse">
+                <div className="flex size-14 items-center justify-center rounded-full bg-neon-blue/15 border border-neon-blue/30 text-neon-blue glow-primary mb-4 animate-pulse">
                   <Sparkles className="size-6 text-neon-blue" />
                 </div>
                 <h3 className="text-xl font-black uppercase tracking-wider text-neon-blue mb-1">
                   선수 성별 정보 보완
                 </h3>
-                <p className="text-xs text-slate-400 max-w-sm mb-6 leading-relaxed">
-                  <span className="font-bold text-slate-200">[{targetStudent.name}]</span> 선수의 성별 정보(M/F)가 지정되지 않았습니다.<br />
+                <p className="text-xs text-soft max-w-sm mb-6 leading-relaxed">
+                  <span className="font-bold text-strong">[{targetStudent.realName || targetStudent.name}]</span> 선수의 성별 정보(M/F)가 지정되지 않았습니다.<br />
                   매치를 정확하게 추천하기 위해 성별을 입력해주세요.
                 </p>
               </div>
@@ -1624,11 +1643,11 @@ export function MatchRecommend({
               <div className="relative z-10 grid grid-cols-2 gap-4 w-full">
                 <button
                   onClick={() => handleUpdateGender("M")}
-                  className="flex flex-col items-center justify-center p-5 rounded-xl border border-neon-blue/30 bg-neon-blue/5 hover:bg-neon-blue/15 hover:border-neon-blue/60 transition-all active:scale-95 group shadow-[0_0_15px_rgba(0,180,216,0.05)]"
+                  className="flex flex-col items-center justify-center p-5 rounded-xl border border-neon-blue/30 bg-neon-blue/5 hover:bg-neon-blue/15 hover:border-neon-blue/60 transition-all active:scale-95 group glow-primary"
                 >
                   <span className="text-4xl mb-2 group-hover:animate-bounce text-neon-blue">♂</span>
                   <span className="text-sm font-black text-neon-blue tracking-wider">남성 (M)</span>
-                  <span className="text-[10px] text-slate-500 mt-1">Male Athlete</span>
+                  <span className="text-[10px] text-soft mt-1">Male Athlete</span>
                 </button>
 
                 <button
@@ -1637,11 +1656,11 @@ export function MatchRecommend({
                 >
                   <span className="text-4xl mb-2 group-hover:animate-bounce text-rose-400">♀</span>
                   <span className="text-sm font-black text-rose-400 tracking-wider">여성 (F)</span>
-                  <span className="text-[10px] text-slate-500 mt-1">Female Athlete</span>
+                  <span className="text-[10px] text-soft mt-1">Female Athlete</span>
                 </button>
               </div>
 
-              <p className="relative z-10 text-[10px] text-slate-500 mt-6 text-center leading-relaxed">
+              <p className="relative z-10 text-[10px] text-soft mt-6 text-center leading-relaxed">
                 입력하신 성별 데이터는 클라우드 데이터베이스에 실시간 영속 동기화됩니다.
               </p>
             </div>

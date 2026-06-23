@@ -142,13 +142,16 @@ export function Leaderboard({
                 <th className="px-4 py-3 text-left">티어</th>
                 <th className="px-4 py-3 text-right">RP</th>
                 <th className="px-4 py-3 text-center hidden md:table-cell">최근 5경기</th>
-                <th className="px-4 py-3 text-right hidden sm:table-cell">승률</th>
+                <th className="px-4 py-3 text-right hidden sm:table-cell">최근 승률</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((s, i) => {
-                const total = s.wins + s.losses;
-                const winRate = total === 0 ? 0 : Math.round((s.wins / total) * 100);
+                // 최근 10경기 승률 (recent 배열은 최신순, 최대 10개 유지)
+                const recent10 = s.recent.slice(0, 10);
+                const recentN = recent10.length;
+                const recentWins = recent10.filter((r) => r === "W").length;
+                const winRate = recentN === 0 ? 0 : Math.round((recentWins / recentN) * 100);
                 return (
                   <tr key={s.id} className="border-b border-border/30 transition-colors hover:bg-accent/40">
                     <td className="px-4 py-3 font-bold tabular-nums w-12 sm:w-16">
@@ -199,7 +202,7 @@ export function Leaderboard({
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums hidden sm:table-cell">
                       <span className="font-semibold">{winRate}%</span>
-                      <span className="ml-1 text-xs text-muted-foreground">({s.wins}W {s.losses}L)</span>
+                      <span className="ml-1 text-xs text-muted-foreground">{recentN > 0 ? `(최근 ${recentN}경기)` : "(기록 없음)"}</span>
                     </td>
                   </tr>
                 );
@@ -227,7 +230,7 @@ function FilterChip({
       className={cn(
         "h-8 rounded-full border px-3 text-xs font-semibold transition-all",
         active
-          ? "border-neon-blue/60 bg-neon-blue/15 text-neon-blue shadow-[0_0_16px_oklch(0.78_0.18_230/0.35)]"
+          ? "border-neon-blue/60 bg-neon-blue/15 text-neon-blue glow-primary"
           : cn("border-border/60 bg-card/40 hover:text-foreground", tone ?? "text-muted-foreground"),
       )}
     >

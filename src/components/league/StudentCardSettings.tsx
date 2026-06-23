@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,14 +10,17 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Lock, KeyRound, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
-import type { Student } from "@/lib/league-types";
+import { cn } from "@/lib/utils";
+import type { Student, Match, TierName } from "@/lib/league-types";
 import {
   apiStudentHasCode,
   apiVerifyStudentCode,
   apiClaimStudent,
   apiUpdateStudentNickname,
+  apiSetStudentTitle,
   apiChangeStudentCode,
 } from "@/lib/league-api";
+import { calculateAchievements } from "@/lib/achievement-calculator";
 
 type Notice = { type: "ok" | "err"; text: string } | null;
 
@@ -31,10 +34,16 @@ export function StudentCardSettings({
   student,
   onClose,
   onSaved,
+  students = [],
+  matches = [],
+  thresholds,
 }: {
   student: Student;
   onClose: () => void;
   onSaved: () => void;
+  students?: Student[];
+  matches?: Match[];
+  thresholds?: Record<TierName, number>;
 }) {
   const [loading, setLoading] = useState(true);
   const [hasCode, setHasCode] = useState(false);
@@ -44,6 +53,16 @@ export function StudentCardSettings({
 
   // 입력 상태
   const [nickname, setNickname] = useState(student.nickname?.trim() || "");
+  const [title, setTitle] = useState(student.title?.trim() || "");
+
+  // 해금한 업적(= 선택 가능한 칭호) 목록
+  const unlockedTitles = useMemo(() => {
+    try {
+      return calculateAchievements(students, matches, thresholds, student.id)
+        .filter((a: any) => a.isUnlocked)
+        .map((a: any) => a.name as string);
+    } catch { return []; }
+  }, [students, matches, thresholds, student.id]);
   const [code, setCode] = useState(""); // 신규 코드(최초) 또는 현재 코드(잠금해제)
   const [codeConfirm, setCodeConfirm] = useState("");
   const [newCode, setNewCode] = useState("");
@@ -134,6 +153,23 @@ export function StudentCardSettings({
       setTimeout(onClose, 600);
     } catch (e: any) {
       err("저장에 실패했습니다: " + (e?.message ?? ""));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // 2단계: 대표 칭호 저장
+  const handleSaveTitle = async (next: string) => {
+    setNotice(null);
+    setBusy(true);
+    try {
+      const { error } = await apiSetStudentTitle(student.id, code.trim(), next || null);
+      if (error) throw error;
+      setTitle(next);
+      ok(next ? "대표 칭호가 설정되었습니다!" : "칭호를 해제했습니다.");
+      onSaved();
+    } catch (e: any) {
+      err("칭호 저장에 실패했습니다: " + (e?.message ?? ""));
     } finally {
       setBusy(false);
     }
@@ -275,6 +311,38 @@ export function StudentCardSettings({
               <Button className="w-full" onClick={handleSaveNickname} disabled={busy}>
                 {busy ? <Loader2 className="size-4 animate-spin" /> : "별명 저장"}
               </Button>
+            </div>
+
+            {/* 대표 칭호 — 해금한 업적 중 선택 */}
+            <div className="border-t border-border/40 pt-4 space-y-2">
+              <p className="text-xs font-bold text-muted-foreground">대표 칭호 <span className="font-medium text-muted-foreground/70">(해금한 업적)</span></p>
+              {unlockedTitles.length === 0 ? (
+                <p className="text-[11px] text-muted-foreground">아직 해금한 업적이 없어요. 경기를 더 해보세요!</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleSaveTitle("")}
+                    disabled={busy}
+                    className={cn(
+                      "rounded-full border px-2.5 py-1 text-[11px] font-bold transition-all",
+                      !title ? "border-neon-blue/60 bg-neon-blue/15 text-neon-blue" : "border-border/50 text-muted-foreground hover:text-foreground",
+                    )}
+                  >없음</button>
+                  {unlockedTitles.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => handleSaveTitle(t)}
+                      disabled={busy}
+                      className={cn(
+                        "rounded-full border px-2.5 py-1 text-[11px] font-bold transition-all",
+                        title === t ? "border-amber-500/60 bg-amber-500/15 text-amber-400" : "border-border/50 text-muted-foreground hover:text-foreground",
+                      )}
+                    >{t}</button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="border-t border-border/40 pt-4 space-y-2">

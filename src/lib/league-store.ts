@@ -306,6 +306,7 @@ function useLeagueStoreInternal() {
           losses,
           recent,
           currentStreak,
+          title: s.title ?? null,
           lastMatchDate: s.last_match_date ?? undefined,
           // firstWin 보너스 판정용: 마지막 승리일을 로컬 YYYY-MM-DD 로 (todayYmd와 동일 포맷)
           lastWinDate: s.last_win_date

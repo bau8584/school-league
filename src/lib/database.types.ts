@@ -24,6 +24,7 @@ type StudentRow = {
   display_name: string | null;
   last_match_date: string | null;
   last_win_date: string | null;
+  title: string | null;
 };
 
 type MatchRow = {
